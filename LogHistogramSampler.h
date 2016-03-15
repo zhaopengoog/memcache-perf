@@ -69,6 +69,10 @@ public:
   }
 
   double get_nth(double nth) {
+    if (nth > 99.0) {
+      return get_knth(nth);
+    }
+
     uint64_t count = total();
     uint64_t n = 0;
     double target = count * nth/100;
