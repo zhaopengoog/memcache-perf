@@ -1,4 +1,4 @@
-Mutilate [![Build Status](https://img.shields.io/travis/dterei/mutilate.svg?style=flat)](https://travis-ci.org/dterei/mutilate)
+Mutilate
 ========
 
 Mutilate is a memcached load generator designed for high request
@@ -9,10 +9,9 @@ Requirements
 ============
 
 1. A C++0x compiler
-2. scons
 3. libevent
 4. gengetopt
-5. zeromq (optional)
+5. zeromq 
 
 Mutilate has only been thoroughly tested on Ubuntu 11.10.  We'll flesh
 out compatibility over time.
@@ -20,8 +19,8 @@ out compatibility over time.
 Building
 ========
 
-    apt-get install scons libevent-dev gengetopt libzmq-dev
-    scons
+    apt-get install libevent-dev gengetopt libzmq-dev
+    make
 
 Basic Usage
 ===========

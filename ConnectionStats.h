@@ -26,9 +26,9 @@ class ConnectionStats {
 #elif defined(USE_HISTOGRAM_SAMPLER)
    get_sampler(10000,1), set_sampler(10000,1), op_sampler(1000,1),
 #else
-   get_sampler(200), set_sampler(200), op_sampler(100),
+   get_sampler(2000), set_sampler(2000), op_sampler(100),
 #endif
-   rx_bytes(0), tx_bytes(0), gets(0), sets(0),
+   rx_bytes(0), tx_bytes(0), gets(0), sets(0), start(0), stop(0),
    get_misses(0), skips(0), sampling(_sampling) {}
 
 #ifdef USE_ADAPTIVE_SAMPLER
@@ -60,6 +60,10 @@ class ConnectionStats {
   double get_qps() {
     return (gets + sets) / (stop - start);
   }
+  void dump() {
+	printf("gets=%ldk,sets=%ldk,duration=%.0f,",gets/1000,sets/1000,stop-start);
+	print_stats("DG",get_sampler);
+  }
 
 #ifdef USE_ADAPTIVE_SAMPLER
   double get_nth(double nth) {
@@ -83,8 +87,16 @@ class ConnectionStats {
   }
 #else
   double get_nth(double nth) {
-    // FIXME: nth across gets & sets?
-    return get_sampler.get_nth(nth);
+	double get_val=get_sampler.get_nth(nth);
+	double set_val=set_sampler.total()>0 ? set_sampler.get_nth(nth):0.0;
+	double ret_val=get_val>set_val?get_val:set_val;
+    return ret_val;
+  }
+  double get_avg() {
+	double get_val=get_sampler.average();
+	double set_val=set_sampler.total()>0 ? set_sampler.average():0.0;
+	double ret_val=get_val>set_val?get_val:set_val;
+	return ret_val;
   }
 #endif
 
@@ -123,9 +135,9 @@ class ConnectionStats {
   }
 
   static void print_header() {
-    printf("%-7s %7s %7s %7s %7s %7s %7s %7s %7s\n",
+    printf("%-7s %7s %7s %7s %7s %7s %7s %7s %7s %7s\n",
            "#type", "avg", "std", "min", /*"1st",*/ "5th", "10th",
-           "90th", "95th", "99th");
+           "90th", "95th", "99th", "p999");
   }
 
 #ifdef USE_ADAPTIVE_SAMPLER
@@ -199,11 +211,11 @@ class ConnectionStats {
       return;
     }
 
-    printf("%-7s %7.1f %7.1f %7.1f %7.1f %7.1f %7.1f %7.1f %7.1f",
+    printf("%-7s %7.1f %7.1f %7.1f %7.1f %7.1f %7.1f %7.1f %7.1f %7.1f",
            tag, sampler.average(), sampler.stddev(),
            sampler.get_nth(0), /*sampler.get_nth(1),*/ sampler.get_nth(5),
            sampler.get_nth(10), sampler.get_nth(90),
-           sampler.get_nth(95), sampler.get_nth(99));
+           sampler.get_nth(95), sampler.get_nth(99), sampler.get_knth(999));
 
     if (newline) printf("\n");
   }

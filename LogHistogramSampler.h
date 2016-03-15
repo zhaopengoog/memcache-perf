@@ -86,23 +86,42 @@ public:
     return pow(_POW, bins.size());
   } 
 
+  double get_knth(double nth) {
+    uint64_t count = total();
+    uint64_t n = 0;
+    double target = count * nth/1000;
+
+    for (size_t i = 0; i < bins.size(); i++) {
+      n += bins[i];
+
+      if (n > target) { // The nth is inside bins[i].
+        double left = target - (n - bins[i]);
+        return pow(_POW, (double) i) +
+          left / bins[i] * (pow(_POW, (double) (i+1)) - pow(_POW, (double) i));
+      }
+    }
+
+    return pow(_POW, bins.size());
+  } 
+
   uint64_t total() {
     uint64_t sum = 0.0;
+	std::vector<uint64_t>::iterator i;
 
-    for (auto i: bins) sum += i;
+    for (i = bins.begin(); i!=bins.end(); i++) sum += *i;
 
     return sum;
   }
 
   void accumulate(const LogHistogramSampler &h) {
     assert(bins.size() == h.bins.size());
-
     for (size_t i = 0; i < bins.size(); i++) bins[i] += h.bins[i];
 
     sum += h.sum;
     sum_sq += h.sum_sq;
+	std::vector<Operation>::const_iterator hi;
 
-    for (auto i: h.samples) samples.push_back(i);
+    for (hi=h.samples.begin();  hi!=h.samples.end(); hi++) samples.push_back(*hi);
   }
 };
 

@@ -37,6 +37,7 @@
 #include "log.h"
 #include "mutilate.h"
 #include "util.h"
+#include "cpu_stat_thread.h"
 
 #define MIN(a,b) ((a) < (b) ? (a) : (b))
 
@@ -84,11 +85,96 @@ void args_to_options(options_t* options);
 void* thread_main(void *arg);
 
 #ifdef HAVE_LIBZMQ
+static unsigned int max_poll_time=0;
+static unsigned int poll_interval_s=1;
+static long poll_interval_ns=100000;
+void setup_socket_timers(unsigned int max,  unsigned int ptime) {
+	if (max>0)
+		max_poll_time=max;
+	if (ptime>0)
+		poll_interval_s=ptime;
+}
+#if defined(ZMQ_NOBLOCK)
+int noblock_flag=ZMQ_NOBLOCK;
+#elif defined(ZMQ_DONTWAIT)
+int noblock_flag=ZMQ_DONTWAIT;
+#endif
+
+bool poll_recv(zmq::socket_t &socket, zmq::message_t *msg) {
+	unsigned int timer=max_poll_time;
+	bool status=false;
+	V("- recv"); //TODO:DBG
+	//if no timeout, just block
+	if (timer == 0) { 
+		return socket.recv(msg);
+	}
+	//otherwise, recv non blocking until timeout passed
+	int itid=0;
+	struct timespec st;
+	st.tv_sec=poll_interval_s;
+	st.tv_nsec=0;
+	do {
+		itid++;
+		status=socket.recv(msg,noblock_flag);
+		if (status)
+			return status;
+		// if failed, check errno for fail reason
+		if (zmq_errno () == EAGAIN) {
+			// if failed just bcs msg non blocking, try again after sleeping for poll interval
+			nanosleep(&st,NULL);
+			timer-=poll_interval_s;
+		} else {
+			W("ERROR in socket! [%d]",zmq_errno());
+			break;
+		}
+		if ((itid & 0xff) == 0) {
+			V("Socket recv multi iterate...");//TODO:DBG
+		}
+	} while (timer > poll_interval_s);
+	W("Failed to recv within requested time limit. Aborting recv.");
+	return false;
+}
+
+bool poll_send(zmq::socket_t &socket, zmq::message_t &msg) {
+	unsigned int timer=max_poll_time;
+	bool status=false;
+	V("- send"); //TODO:DBG
+	//if no timeout, just block
+#if 1
+	return socket.send(msg);
+#else
+	if (timer == 0) { 
+		return socket.send(msg);
+	}
+	//otherwise, recv non blocking until timeout passed
+	do {
+		status=socket.send(msg,noblock_flag);
+		if (status == 0)
+			return status;
+		// if failed, check errno for fail reason
+		if (zmq_errno () == EAGAIN) {
+			// if failed just bcs msg non blocking, try again after sleeping for poll interval
+			usleep(poll_interval_us);
+			timer-=poll_interval_us;
+		} else {
+			W("ERROR in socket! [%d]",zmq_errno());
+			break;
+		}
+	} while (timer > poll_interval_us);
+	W("Failed to send within requested time limit. Aborting send.");
+	return false;
+#endif
+}
+
 static std::string s_recv (zmq::socket_t &socket) {
   zmq::message_t message;
-  socket.recv(&message);
+  //socket.recv(&message);
+  bool status=poll_recv(socket,&message);
 
-  return std::string(static_cast<char*>(message.data()), message.size());
+  if (status)
+	return std::string(static_cast<char*>(message.data()), message.size());
+  else 
+	return std::string("FAIL-RECV");
 }
 
 //  Convert string to 0MQ string and send to socket
@@ -96,7 +182,8 @@ static bool s_send (zmq::socket_t &socket, const std::string &string) {
   zmq::message_t message(string.size());
   memcpy(message.data(), string.data(), string.size());
 
-  return socket.send(message);
+  //return socket.send(message);
+  return poll_send(socket,message);
 }
 
 /*
@@ -159,27 +246,32 @@ void agent() {
   zmq::socket_t socket(context, ZMQ_REP);
   socket.bind((string("tcp://*:")+string(args.agent_port_arg)).c_str());
 
+int lid=0;
   while (true) {
     zmq::message_t request;
 
     socket.recv(&request);
+lid++;
 
     zmq::message_t num(sizeof(int));
     *((int *) num.data()) = args.threads_arg * args.lambda_mul_arg;
     socket.send(num);
-
+V("sent num %d",lid);
     options_t options;
     memcpy(&options, request.data(), sizeof(options));
+V("Got options: %d %s",options.connections,options.loadonly ? "loadonly" : options.noload ? "noload" : "");
 
     vector<string> servers;
 
     for (int i = 0; i < options.server_given; i++) {
       servers.push_back(s_recv(socket));
-      s_send(socket, "ACK");
+      s_send(socket, "ack");
     }
+V("sent ack");
+    vector<string>::iterator i;
 
-    for (auto i: servers) {
-      V("Got server = %s", i.c_str());
+    for (i= servers.begin(); i!=servers.end(); i++) {
+      V("Got server = %s", i->c_str());
     }
 
     options.threads = args.threads_arg;
@@ -187,6 +279,7 @@ void agent() {
     socket.recv(&request);
     options.lambda_denom = *((int *) request.data());
     s_send(socket, "THANKS");
+V("sent tnx");
 
     //    V("AGENT SLEEPS"); sleep(1);
     options.lambda = (double) options.qps / options.lambda_denom * args.lambda_mul_arg;
@@ -198,9 +291,10 @@ void agent() {
       pthread_barrier_init(&barrier, NULL, options.threads);
 
     ConnectionStats stats;
+V("launching go");
 
     go(servers, options, stats, &socket);
-
+V("Done run.");
     AgentStats as;
 
     as.rx_bytes = stats.rx_bytes;
@@ -213,15 +307,17 @@ void agent() {
     as.skips = stats.skips;
 
     string req = s_recv(socket);
-    //    V("req = %s", req.c_str());
+    V("req = %s", req.c_str());
     request.rebuild(sizeof(as));
     memcpy(request.data(), &as, sizeof(as));
     socket.send(request);
+    V("send = %s", req.c_str());
   }
 }
 
 void prep_agent(const vector<string>& servers, options_t& options) {
   int sum = options.lambda_denom;
+  int aid=0;
   if (args.measure_connections_given)
     sum = args.measure_connections_arg * options.server_given * options.threads;
 
@@ -230,27 +326,57 @@ void prep_agent(const vector<string>& servers, options_t& options) {
     sum = 0;
     if (options.qps) options.qps -= args.measure_qps_arg;
   }
-
-  for (auto s: agent_sockets) {
+  vector<zmq::socket_t*>::iterator its;
+  for ( its=agent_sockets.begin(); its!=agent_sockets.end(); its++ ) {
+    zmq::socket_t *s=*its;
     zmq::message_t message(sizeof(options_t));
+	bool status;
+	aid++;
 
+V("Agent %d prep ", aid);
     memcpy((void *) message.data(), &options, sizeof(options_t));
-    s->send(message);
+    status=poll_send(*s,message);
+V("Agent %d prep send = %s", aid, status?"true":"false");
 
     zmq::message_t rep;
-    s->recv(&rep);
+    status=poll_recv(*s,&rep);
+V("Agent %d prep recv= %s", aid, status?"true":"false");
+	if (!status) { // problem communicating with this agent, don't use it!
+		W("Agent failure detected, skip agent %d!",aid);
+		its=agent_sockets.erase(its); // remove from list of active agents
+		delete(s);
+		its--; // adjust the iterator since we did not iterate over the next agent
+		continue;
+	}
     unsigned int num = *((int *) rep.data());
 
     sum += options.connections * (options.roundrobin ?
             (servers.size() > num ? servers.size() : num) : 
             (servers.size() * num));
-
-    for (auto i: servers) {
-      s_send(*s, i);
+    vector<string>::const_iterator it;
+	int itid=0;
+    for (it = servers.begin() ; 
+	 it != servers.end() ; 
+	 it++) 
+    {
+      s_send(*s, *it);
       string rep = s_recv(*s);
+	  if (rep.compare("FAIL-RECV") == 0) {
+		itid=-1;
+		break;
+	  }
+	  itid++;
     }
+	// in case communication with agent broke down, remove from active list
+	if (itid<0) {
+		W("Agent failure detected, skip agent %d!",aid);
+		its=agent_sockets.erase(its); // remove from list of active agents
+		delete(s);
+		its--; // adjust the iterator since we did not iterate over the next agent
+	}
   }
 
+  
   // Adjust options_t according to --measure_* arguments.
   options.lambda_denom = sum;
   options.lambda = (double) options.qps / options.lambda_denom *
@@ -270,11 +396,20 @@ void prep_agent(const vector<string>& servers, options_t& options) {
 
   if (args.measure_depth_given) options.depth = args.measure_depth_arg;
 
-  for (auto s: agent_sockets) {
+  for ( its=agent_sockets.begin(); its!=agent_sockets.end(); its++ ) {
+    zmq::socket_t *s=*its;
+  //for (auto s: agent_sockets) {
+  //
     zmq::message_t message(sizeof(sum));
     *((int *) message.data()) = sum;
-    s->send(message);
+    poll_send(*s,message);
     string rep = s_recv(*s);
+	if (rep.compare("FAIL-RECV") == 0) {
+		W("Agent failure detected, skip agent %d!",aid);
+		its=agent_sockets.erase(its); // remove from list of active agents
+		delete(s);
+		its--; // adjust the iterator since we did not iterate over the next agent
+	}
   }
 
   // Master sleeps here to give agents a chance to connect to
@@ -285,13 +420,21 @@ void prep_agent(const vector<string>& servers, options_t& options) {
 }
 
 void finish_agent(ConnectionStats &stats) {
-  for (auto s: agent_sockets) {
-    s_send(*s, "stats");
+	int aid=0;
+  //for (auto s: agent_sockets) {
+  vector<zmq::socket_t*>::iterator its;
+  for ( its=agent_sockets.begin(); its!=agent_sockets.end(); its++ ) {
+    zmq::socket_t *s=*its;
+	aid++;
+	bool status;
+    status=s_send(*s, "stats");
+V("Agent %d finish send = %s", aid, status?"true":"false");
 
     AgentStats as;
     zmq::message_t message;
 
-    s->recv(&message);
+    status=poll_recv(*s,&message);
+V("Agent %d finish recv = %s", aid, status?"true":"false");
     memcpy(&as, message.data(), sizeof(as));
     stats.accumulate(as);
   }
@@ -319,38 +462,65 @@ void finish_agent(ConnectionStats &stats) {
  * skew.
  */
 
-void sync_agent(zmq::socket_t* socket) {
-  //  V("agent: synchronizing");
-
+int sync_agent(zmq::socket_t* socket) {
+  V("agent: synchronizing");
+  int aid=0;
+  int errors=0;
   if (args.agent_given) {
-    for (auto s: agent_sockets)
+   vector<zmq::socket_t*>::iterator its;
+   for ( its=agent_sockets.begin(); its!=agent_sockets.end(); its++ ) {
+    zmq::socket_t *s=*its;
       s_send(*s, "sync_req");
+	  V("Sent sync_req to agent %d",++aid);
+   }
+	aid=0;
 
     /* The real sync */
-    for (auto s: agent_sockets)
-      if (s_recv(*s).compare(string("sync")))
-        DIE("sync_agent[M]: out of sync [1]");
-    for (auto s: agent_sockets)
+   for ( its=agent_sockets.begin(); its!=agent_sockets.end(); its++ ) {
+	zmq::socket_t *s=*its;aid++;
+    string rep = s_recv(*s);
+    if (rep.compare(string("sync")) != 0) {
+        W("sync_agent[M]: out of sync [1] for agent %d expected sync got %s",aid,rep.c_str());
+		errors++;
+	}
+   }
+	aid=0;
+   for ( its=agent_sockets.begin(); its!=agent_sockets.end(); its++ ) {
+    zmq::socket_t *s=*its;
       s_send(*s, "proceed");
+	V("Sent proceed to agent %d",++aid);
+   }
     /* End sync */
-
-    for (auto s: agent_sockets)
-      if (s_recv(*s).compare(string("ack")))
-        DIE("sync_agent[M]: out of sync [2]");
+	aid=0;
+   for ( its=agent_sockets.begin(); its!=agent_sockets.end(); its++ ) {
+    zmq::socket_t *s=*its;aid++;
+    string rep = s_recv(*s);
+    if (rep.compare(string("ack")) != 0) {
+        W("sync_agent[M]: out of sync [2] for agent %d expected ack got %s",aid,rep.c_str());
+		errors++;
+	}
+   }
   } else if (args.agentmode_given) {
-    if (s_recv(*socket).compare(string("sync_req")))
-      DIE("sync_agent[A]: out of sync [1]");
+      string rep = s_recv(*socket);
+     if (rep.compare(string("sync_req")) != 0) {
+      W("sync_agent[A]: out of sync [1] got %s expected sync_req",rep.c_str());
+	errors++;
+	}
 
     /* The real sync */
-    s_send(*socket, "sync");
-    if (s_recv(*socket).compare(string("proceed")))
-      DIE("sync_agent[A]: out of sync [2]");
+     s_send(*socket, "sync");
+     rep = s_recv(*socket);
+     if (rep.compare(string("proceed")) != 0) {
+      W("sync_agent[A]: out of sync [2] got %s expected proceed",rep.c_str());
+	errors++;
+	}
     /* End sync */
 
     s_send(*socket, "ack");
   }
 
-  //  V("agent: synchronized");
+  V("agent: synchronized with %d errors",errors);
+  return errors;
 }
 #endif
 
@@ -448,26 +618,55 @@ int main(int argc, char **argv) {
   //  evthread_use_pthreads();
 
   //  if ((evdns = evdns_base_new(base, 1)) == 0) DIE("evdns");
+  options_t options;
+  args_to_options(&options);
 
 #ifdef HAVE_LIBZMQ
   if (args.agentmode_given) {
     agent();
     return 0;
   } else if (args.agent_given) {
+	int status;
     for (unsigned int i = 0; i < args.agent_given; i++) {
       zmq::socket_t *s = new zmq::socket_t(context, ZMQ_REQ);
+	  if (s==NULL) {
+		DIE("Could not open socket! %s",zmq_strerror(zmq_errno()));
+	  }
       string host = string("tcp://") + string(args.agent_arg[i]) +
         string(":") + string(args.agent_port_arg);
-      s->connect(host.c_str());
-      agent_sockets.push_back(s);
+		// setup socket to handle as many connections as we will need
+    int nconns = args.measure_connections_given ? args.measure_connections_arg :
+      options.connections;
+    int nthreads = args.threads_given ? args.threads_arg :
+      options.threads;
+		
+	int total_conn = 2 * (nconns+1) * (nthreads+1);
+	if (total_conn<100)
+		total_conn=100;
+		
+	s->setsockopt(ZMQ_BACKLOG,&total_conn,sizeof(total_conn));
+	int linger=10000;
+	s->setsockopt(ZMQ_LINGER,&linger,sizeof(linger));
+	
+	//then connect
+	try {
+		s->connect(host.c_str());
+		agent_sockets.push_back(s);
+	} catch (...) {
+		DIE("Agent not available at %s!  Please make sure that the agent process is running, and the ports are open.\n",host.c_str());
+	}
+
+    //s->connect(host.c_str());
+    //agent_sockets.push_back(s);
     }
   }
 #endif
 
-  options_t options;
-  args_to_options(&options);
 
   pthread_barrier_init(&barrier, NULL, options.threads);
+  
+  cpu_info_t cpustat;
+  pthread_create(&(cpustat.tid), 0, cpu_stat_thread, &cpustat);
 
   vector<string> servers;
   for (unsigned int s = 0; s < args.server_given; s++)
@@ -476,6 +675,7 @@ int main(int argc, char **argv) {
   ConnectionStats stats;
 
   double peak_qps = 0.0;
+  bool avgseek=false;
 
   if (args.search_given) {
     char *n_ptr = strtok(args.search_arg, ":");
@@ -483,10 +683,14 @@ int main(int argc, char **argv) {
 
     if (n_ptr == NULL || x_ptr == NULL) DIE("Invalid --search argument");
 
+    if (strstr("avg",n_ptr)!=NULL) {
+	avgseek=true;
+    }
     int n = atoi(n_ptr);
     int x = atoi(x_ptr);
 
-    I("Search-mode.  Find QPS @ %dus %dth percentile.", x, n);
+    if (avgseek) I("Search-mode.  Find QPS @ %dus avg latency.", x, n);
+    else I("Search-mode.  Find QPS @ %dus %dth percentile.", x, n);
 
     int high_qps = 2000000;
     int low_qps = 1; // 5000;
@@ -495,16 +699,16 @@ int main(int argc, char **argv) {
 
     go(servers, options, stats);
 
-    nth = stats.get_nth(n);
+    if (avgseek) nth=stats.get_avg();
+    else nth = stats.get_nth(n);
     peak_qps = stats.get_qps();
     high_qps = stats.get_qps();
     cur_qps = stats.get_qps();
 
-    I("peak qps = %d, nth = %.1f", high_qps, nth);
+    I("peak qps = % 8d, %s = %.1f", high_qps, n_ptr, nth);
 
     if (nth > x) {
-      //    while ((high_qps > low_qps * 1.02) && cur_qps > 10000) {
-    while ((high_qps > low_qps * 1.02) && cur_qps > (peak_qps * .1)) {
+    while ((high_qps > low_qps * 1.03) && cur_qps > (peak_qps * .01)) {
       cur_qps = (high_qps + low_qps) / 2;
 
       args_to_options(&options);
@@ -516,9 +720,10 @@ int main(int argc, char **argv) {
 
       go(servers, options, stats);
 
-      nth = stats.get_nth(n);
+      if (avgseek) nth=stats.get_avg();
+      else nth = stats.get_nth(n);
 
-      I("cur_qps = %d, get_qps = %f, nth = %f", cur_qps, stats.get_qps(), nth);
+      I(". target = % 8d, %s = %.1f, high_qps = %d, low_qps = %d, qps = %.0f", cur_qps,n_ptr,nth, high_qps, low_qps, stats.get_qps());
 
       if (nth > x /*|| cur_qps > stats.get_qps() * 1.05*/) high_qps = cur_qps;
       else low_qps = cur_qps;
@@ -526,7 +731,7 @@ int main(int argc, char **argv) {
 
     //    while (nth > x && cur_qps > 10000) { // > low_qps) { // 10000) {
       //    while (nth > x && cur_qps > 10000 && cur_qps > (low_qps * 0.90)) {
-    while (nth > x && cur_qps > (peak_qps * .1) && cur_qps > (low_qps * 0.90)) {
+    while (nth > x && cur_qps > (peak_qps * .01) && cur_qps > (low_qps * 0.03)) {
       cur_qps = cur_qps * 98 / 100;
 
       args_to_options(&options);
@@ -538,9 +743,10 @@ int main(int argc, char **argv) {
 
       go(servers, options, stats);
 
-      nth = stats.get_nth(n);
+      if (avgseek) nth=stats.get_avg();
+      else nth = stats.get_nth(n);
 
-      I("cur_qps = %d, get_qps = %f, nth = %f", cur_qps, stats.get_qps(), nth);
+      I(". target = % 8d, %s = %.1f, high_qps = %d, low_qps = %d, qps = %.0f", cur_qps,n_ptr,nth, high_qps, low_qps, stats.get_qps());
     }
 
     }
@@ -617,19 +823,29 @@ int main(int argc, char **argv) {
       FILE *file;
       if ((file = fopen(args.save_arg, "w")) == NULL)
         DIE("--save: failed to open %s: %s", args.save_arg, strerror(errno));
-
-      for (auto i: stats.get_sampler.samples) {
-        fprintf(file, "%f %f\n", i.start_time - boot_time, i.time());
+	std::vector<Operation>::const_iterator i;
+      for ( i= stats.get_sampler.samples.begin(); i!=stats.get_sampler.samples.end(); i++) {
+        fprintf(file, "%f %f\n", i->start_time - boot_time, i->time());
       }
     }
   }
+
+  stop_cpu_stats();
+  pthread_join(cpustat.tid,0);
+  if (!args.loadonly_given)
+	printf("CPU Usage Stats (avg/min/max): %.2Lf%%,%.2Lf%%,%.2Lf%%\n",cpustat.avg,cpustat.min,cpustat.max);
 
   //  if (args.threads_arg > 1) 
     pthread_barrier_destroy(&barrier);
 
 #ifdef HAVE_LIBZMQ
   if (args.agent_given) {
-    for (auto i: agent_sockets) delete i;
+   vector<zmq::socket_t*>::iterator its;
+   for ( its=agent_sockets.begin(); its!=agent_sockets.end(); its++ ) {
+    zmq::socket_t *s=*its;
+    //for (auto i: agent_sockets) delete i;
+    delete s;
+   }
   }
 #endif
 
@@ -637,6 +853,7 @@ int main(int argc, char **argv) {
   // event_base_free(base);
 
   cmdline_parser_free(&args);
+  return 0;
 }
 
 void go(const vector<string>& servers, options_t& options,
@@ -647,7 +864,9 @@ void go(const vector<string>& servers, options_t& options,
 ) {
 #ifdef HAVE_LIBZMQ
   if (args.agent_given > 0) {
+V("agent given");
     prep_agent(servers, options);
+V("Agent prep done.");
   }
 #endif
 
@@ -660,12 +879,13 @@ void go(const vector<string>& servers, options_t& options,
     vector<string> ts[options.threads];
 #endif
 
-#ifdef __linux__
     int current_cpu = -1;
-#endif
-
+    //options.qps/=options.threads;
+    //options.lambda/=(double)options.threads;
+D("Starting %d threads.", options.threads);
     for (int t = 0; t < options.threads; t++) {
       td[t].options = &options;
+
 #ifdef HAVE_LIBZMQ
       td[t].socket = socket;
 #endif
@@ -685,7 +905,6 @@ void go(const vector<string>& servers, options_t& options,
       pthread_attr_t attr;
       pthread_attr_init(&attr);
 
-#ifdef __linux__
       if (args.affinity_given) {
         int max_cpus = 8 * sizeof(cpu_set_t);
         cpu_set_t m;
@@ -707,14 +926,15 @@ void go(const vector<string>& servers, options_t& options,
           }
         }
       }
-#endif
 
       if (pthread_create(&pt[t], &attr, thread_main, &td[t]))
         DIE("pthread_create() failed");
     }
+D("Fired all threads.");
 
     for (int t = 0; t < options.threads; t++) {
       ConnectionStats *cs;
+D("Waiting for thread %d.",t);
       if (pthread_join(pt[t], (void**) &cs)) DIE("pthread_join() failed");
       stats.accumulate(*cs);
       delete cs;
@@ -728,7 +948,8 @@ void go(const vector<string>& servers, options_t& options,
   } else {
 #ifdef HAVE_LIBZMQ
     if (args.agent_given) {
-      sync_agent(socket);
+      int err=sync_agent(socket);
+	if (err>0) DIE("ERRORS in agent sync!");
     }
 #endif
   }
@@ -744,6 +965,7 @@ void go(const vector<string>& servers, options_t& options,
     finish_agent(stats);
   }
 #endif
+D("End of go()");
 }
 
 void* thread_main(void *arg) {
@@ -797,16 +1019,17 @@ void do_mutilate(const vector<string>& servers, options_t& options,
 
   vector<Connection*> connections;
   vector<Connection*> server_lead;
+	 vector<string>::const_iterator s;
 
-  for (auto s: servers) {
+  for (s=servers.begin(); s!=servers.end(); s++) {
     // Split args.server_arg[s] into host:port using strtok().
-    char *s_copy = new char[s.length() + 1];
-    strcpy(s_copy, s.c_str());
+    char *s_copy = new char[s->length() + 1];
+    strcpy(s_copy, s->c_str());
 
     char *h_ptr = strtok_r(s_copy, ":", &saveptr);
     char *p_ptr = strtok_r(NULL, ":", &saveptr);
 
-    if (h_ptr == NULL) DIE("strtok(.., \":\") failed to parse %s", s.c_str());
+    if (h_ptr == NULL) DIE("strtok(.., \":\") failed to parse %s", s->c_str());
 
     string hostname = h_ptr;
     string port = "11211";
@@ -816,6 +1039,7 @@ void do_mutilate(const vector<string>& servers, options_t& options,
 
     int conns = args.measure_connections_given ? args.measure_connections_arg :
       options.connections;
+	D("Connections req %s %d [%d/%d]",s->c_str(),conns,args.measure_connections_arg,options.connections);
 
     for (int c = 0; c < conns; c++) {
       Connection* conn = new Connection(base, evdns, hostname, port, options,
@@ -827,34 +1051,57 @@ void do_mutilate(const vector<string>& servers, options_t& options,
   }
 
   // Wait for all Connections to become IDLE.
+  int lcntr=0;
+  struct timeval delay;
+  //SG setup auto exit from evloop to break potential deadlock
+  delay.tv_sec = 4;
+  delay.tv_usec = 0;
+
+  V("evt based loop start\n");
   while (1) {
     // FIXME: If all connections become ready before event_base_loop
     // is called, this will deadlock.
+    event_base_loopexit(base, &delay);
     event_base_loop(base, EVLOOP_ONCE);
 
     bool restart = false;
-    for (Connection *conn: connections)
-      if (!conn->is_ready()) restart = true;
-
+	 vector<Connection*>::iterator conn;
+	lcntr++;
+	int cid=0;
+    for (conn= connections.begin(); conn!=connections.end(); conn++ ) {
+		if ((*conn)->read_state != Connection::IDLE) {
+			restart = true;
+		}
+		cid++;
+		if ((lcntr & 0x3f) == 0) {
+			V("evt based loop [%d] taking long time. read state=%d/%d",lcntr,(*conn)->read_state,cid);
+		}
+	}
     if (restart) continue;
     else break;
   }
+  V("evt based loop end\n");
 
   // Load database on lead connection for each server.
   if (!options.noload) {
-    V("Loading database.");
-
-    for (auto c: server_lead) c->start_loading();
+    D("Loading database.");
+	vector<Connection*>::iterator c;
+    for (c= server_lead.begin(); c!=server_lead.end(); c++ ) (*c)->start_loading();
 
     // Wait for all Connections to become IDLE.
     while (1) {
       // FIXME: If all connections become ready before event_base_loop
       // is called, this will deadlock.
-      event_base_loop(base, EVLOOP_ONCE);
+    event_base_loopexit(base, &delay);
+      event_base_loop(base, EVLOOP_ONCE );
 
       bool restart = false;
-      for (Connection *conn: connections)
-        if (!conn->is_ready()) restart = true;
+         vector<Connection*>::iterator conn;
+    for (conn= connections.begin(); conn!=connections.end(); conn++ )
+      if ((*conn)->read_state != Connection::IDLE) {
+        restart = true;
+
+	}
 
       if (restart) continue;
       else break;
@@ -882,11 +1129,13 @@ void do_mutilate(const vector<string>& servers, options_t& options,
       // 1. thread barrier: make sure our threads ready before syncing agents
       // 2. sync agents: all threads across all agents are now ready
       // 3. thread barrier: don't release our threads until all agents ready
+      int err=0;
       pthread_barrier_wait(&barrier);
-      if (master) sync_agent(socket);
+      if (master) err=sync_agent(socket);
       pthread_barrier_wait(&barrier);
 
       if (master) V("Synchronized.");
+	if (err>0) DIE("ERROR during synchronization! %s:%d",__FILE__,__LINE__);
     }
 #endif
 
@@ -894,10 +1143,13 @@ void do_mutilate(const vector<string>& servers, options_t& options,
     //    options.time = 1;
 
     start = get_time();
-    for (Connection *conn: connections) {
+         vector<Connection*>::iterator iconn;
+    for (iconn= connections.begin(); iconn!=connections.end(); iconn++ ) {
+	Connection *conn=*iconn;
+
       conn->start_time = start;
       conn->options.time = options.warmup;
-      conn->start(); // Kick the Connection into motion.
+      conn->drive_write_machine(); // Kick the Connection into motion.
     }
 
     while (1) {
@@ -912,17 +1164,23 @@ void do_mutilate(const vector<string>& servers, options_t& options,
       //#endif
 
       bool restart = false;
-      for (Connection *conn: connections)
+         vector<Connection*>::iterator iconn;
+    for (iconn= connections.begin(); iconn!=connections.end(); iconn++ ) {
+        Connection *conn=*iconn;
         if (!conn->check_exit_condition(now))
           restart = true;
+	}
 
       if (restart) continue;
       else break;
     }
 
     bool restart = false;
-    for (Connection *conn: connections)
-      if (!conn->is_ready()) restart = true;
+    for (iconn= connections.begin(); iconn!=connections.end(); iconn++ ) {
+        Connection *conn=*iconn;
+      if (conn->read_state != Connection::IDLE)
+        restart = true;
+	}
 
     if (restart) {
 
@@ -935,16 +1193,23 @@ void do_mutilate(const vector<string>& servers, options_t& options,
       event_base_loop(base, EVLOOP_ONCE); // EVLOOP_NONBLOCK);
 
       bool restart = false;
-      for (Connection *conn: connections)
-        if (!conn->is_ready()) restart = true;
+         vector<Connection*>::iterator iconn;
+    for (iconn= connections.begin(); iconn!=connections.end(); iconn++ ) {
+        Connection *conn=*iconn;
+        if (conn->read_state != Connection::IDLE)
+          restart = true;
+	}
 
       if (restart) continue;
       else break;
     }
     }
 
-    for (Connection *conn: connections) {
+    //    options.time = old_time;
+    for (iconn= connections.begin(); iconn!=connections.end(); iconn++ ) {
+        Connection *conn=*iconn;
       conn->reset();
+      //      conn->stats = ConnectionStats();
       conn->options.time = old_time;
     }
 
@@ -967,11 +1232,13 @@ void do_mutilate(const vector<string>& servers, options_t& options,
   if (args.agent_given || args.agentmode_given) {
     if (master) V("Synchronizing.");
 
+	int err=0;
     pthread_barrier_wait(&barrier);
-    if (master) sync_agent(socket);
+    if (master) err=sync_agent(socket);
     pthread_barrier_wait(&barrier);
 
     if (master) V("Synchronized.");
+	if (err>0) DIE("ERROR during synchronization! %s:%d",__FILE__,__LINE__);
   }
 #endif
 
@@ -979,9 +1246,11 @@ void do_mutilate(const vector<string>& servers, options_t& options,
     V("started at %f", get_time());
 
   start = get_time();
-  for (Connection *conn: connections) {
+         vector<Connection*>::iterator iconn;
+    for (iconn= connections.begin(); iconn!=connections.end(); iconn++ ) {
+        Connection *conn=*iconn;
     conn->start_time = start;
-    conn->start(); // Kick the Connection into motion.
+    conn->drive_write_machine(); // Kick the Connection into motion.
   }
 
   //  V("Start = %f", start);
@@ -999,9 +1268,12 @@ void do_mutilate(const vector<string>& servers, options_t& options,
     //#endif
 
     bool restart = false;
-    for (Connection *conn: connections)
+         vector<Connection*>::iterator iconn;
+    for (iconn= connections.begin(); iconn!=connections.end(); iconn++ ) {
+        Connection *conn=*iconn;
       if (!conn->check_exit_condition(now))
         restart = true;
+	}
 
     if (restart) continue;
     else break;
@@ -1011,7 +1283,8 @@ void do_mutilate(const vector<string>& servers, options_t& options,
     V("stopped at %f  options.time = %d", get_time(), options.time);
 
   // Tear-down and accumulate stats.
-  for (Connection *conn: connections) {
+    for (iconn= connections.begin(); iconn!=connections.end(); iconn++ ) {
+        Connection *conn=*iconn;
     stats.accumulate(conn->stats);
     delete conn;
   }
@@ -1056,6 +1329,8 @@ void args_to_options(options_t* options) {
   //  if (args.no_record_scale_given)
   //    options->records = args.records_arg;
   //  else
+  if (options->server_given==0)
+	options->server_given=1;
   options->records = args.records_arg / options->server_given;
 
   options->binary = args.binary_given;
@@ -1090,11 +1365,24 @@ void args_to_options(options_t* options) {
   options->oob_thread = false;
   options->skip = args.skip_given;
   options->moderate = args.moderate_given;
+  options->getq_freq = args.getq_freq_given ? args.getq_freq_arg : 0.0;
+  options->getq_size = args.getq_size_arg;
 }
 
 void init_random_stuff() {
   static char lorem[] =
-    R"(Lorem ipsum dolor sit amet, consectetur adipiscing elit. Maecenas turpis dui, suscipit non vehicula non, malesuada id sem. Phasellus suscipit nisl ut dui consectetur ultrices tincidunt eros aliquet. Donec feugiat lectus sed nibh ultrices ultrices. Vestibulum ante ipsum primis in faucibus orci luctus et ultrices posuere cubilia Curae; Mauris suscipit eros sed justo lobortis at ultrices lacus molestie. Duis in diam mi. Cum sociis natoque penatibus et magnis dis parturient montes, nascetur ridiculus mus. Ut cursus viverra sagittis. Vivamus non facilisis tortor. Integer lectus arcu, sagittis et eleifend rutrum, condimentum eget sem. Vestibulum tempus tellus non risus semper semper. Morbi molestie rhoncus mi, in egestas dui facilisis et.)";
+    R"(Lorem ipsum dolor sit amet, consectetur adipiscing elit. Maecenas
+turpis dui, suscipit non vehicula non, malesuada id sem. Phasellus
+suscipit nisl ut dui consectetur ultrices tincidunt eros
+aliquet. Donec feugiat lectus sed nibh ultrices ultrices. Vestibulum
+ante ipsum primis in faucibus orci luctus et ultrices posuere cubilia
+Curae; Mauris suscipit eros sed justo lobortis at ultrices lacus
+molestie. Duis in diam mi. Cum sociis natoque penatibus et magnis dis
+parturient montes, nascetur ridiculus mus. Ut cursus viverra
+sagittis. Vivamus non facilisis tortor. Integer lectus arcu, sagittis
+et eleifend rutrum, condimentum eget sem. Vestibulum tempus tellus non
+risus semper semper. Morbi molestie rhoncus mi, in egestas dui
+facilisis et.)";
 
   size_t cursor = 0;
 

@@ -42,6 +42,8 @@ typedef struct {
   bool oob_thread;
 
   bool moderate;
+  double getq_freq;
+  int getq_size;
 } options_t;
 
 #endif // CONNECTIONOPTIONS_H

@@ -3,6 +3,8 @@
 
 #define CMD_GET  0x00
 #define CMD_SET  0x01
+#define CMD_MGET 0x09
+#define CMD_NOOP 0x0a
 #define CMD_SASL 0x21
 
 #define RESP_OK 0x00

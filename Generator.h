@@ -62,12 +62,33 @@ private:
 };
 
 class Uniform : public Generator {
+private:
+  double min;
+  double max;
+  double scale;
+
 public:
-  Uniform(double _scale) : scale(_scale) { D("Uniform(%f)", scale); }
+  Uniform(double _scale) { 
+	scale=_scale; 
+	min=0; 
+	max=scale; 
+	D("Uniform(%f)", scale); 
+  }
+  Uniform(double _min, double _max) { 
+	if (_max<=0.0) { /* in case max is undefined, go 0 .. defined val */
+		max=_min;
+		min=0.0;
+ 	} else {
+		min=_min; 
+		max=_max;
+	}
+	scale=max-min; 
+	D("Uniform(%f..%f)", min,max); 
+  }
 
   virtual double generate(double U = -1.0) {
     if (U < 0.0) U = drand48();
-    return scale * U;
+    return scale * U + min;
   }
 
   virtual void set_lambda(double lambda) {
@@ -75,8 +96,6 @@ public:
     else scale = 0.0;
   }
 
-private:
-  double scale;
 };
 
 class Normal : public Generator {
@@ -171,10 +190,10 @@ public:
     if (pv.size() > 0 && U < 0.0) U = drand48();
 
     double sum = 0;
- 
-    for (auto p: pv) {
-      sum += p.first;
-      if (U < sum) return p.second;
+	std::vector< std::pair<double,double> >::iterator p; 
+    for (p= pv.begin(); p!= pv.end(); p++ )  {
+      sum += (*p).first;
+      if (U < sum) return (*p).second;
     }
 
     return def->generate(Uc);

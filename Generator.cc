@@ -55,9 +55,15 @@ Generator* createGenerator(std::string str) {
   char t = t_ptr[0];
 
   saveptr = NULL;
-  char *s1 = strtok_r(a_ptr, ",", &saveptr);
-  char *s2 = strtok_r(NULL, ",", &saveptr);
-  char *s3 = strtok_r(NULL, ",", &saveptr);
+  char *s1 = NULL;
+  char *s2 = NULL;
+  char *s3 = NULL;
+  
+  if (a_ptr) {
+	  s1=strtok_r(a_ptr, ",", &saveptr);  
+	  s2=strtok_r(NULL, ",", &saveptr);  
+	  s3=strtok_r(NULL, ",", &saveptr);
+  }
 
   double a1 = s1 ? atof(s1) : 0.0;
   double a2 = s2 ? atof(s2) : 0.0;
@@ -70,7 +76,7 @@ Generator* createGenerator(std::string str) {
   else if (strcasestr(str.c_str(), "exponential")) return new Exponential(a1);
   else if (strcasestr(str.c_str(), "pareto")) return new GPareto(a1, a2, a3);
   else if (strcasestr(str.c_str(), "gev")) return new GEV(a1, a2, a3);
-  else if (strcasestr(str.c_str(), "uniform")) return new Uniform(a1);
+  else if (strcasestr(str.c_str(), "uniform")) return new Uniform(a1,a2);
 
   DIE("Unable to create Generator '%s'", str.c_str());
 

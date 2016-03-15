@@ -15,6 +15,8 @@ public:
   };
 
   type_enum type;
+  int n_req;
+  int n_recv;
 
   string key;
   // string value;
