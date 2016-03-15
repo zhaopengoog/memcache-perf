@@ -1,7 +1,7 @@
-Mutilate
-========
+Memcache-perf
+=============
 
-Mutilate is a memcached load generator designed for high request
+Memcache-perf is a memcached load generator designed for high request
 rates, good tail-latency measurements, and realistic request stream
 generation.
 
@@ -9,26 +9,25 @@ Requirements
 ============
 
 1. A C++0x compiler
-3. libevent
-4. gengetopt
-5. zeromq 
+2. libevent2 (get headers and install build-dev for memcached for rest)
+3. zeromq 
 
-Mutilate has only been thoroughly tested on Ubuntu 11.10.  We'll flesh
-out compatibility over time.
+Tested on ubuntu 14.04, x86 64b and ARMv8.
 
 Building
 ========
 
-    apt-get install libevent-dev gengetopt libzmq-dev
+    apt-get install libevent-dev libzmq-dev
+    apt-get build-dep memcached
     make
 
 Basic Usage
 ===========
 
-Type './mutilate -h' for a full list of command-line options.  At
+Type './mcperf -h' for a full list of command-line options.  At
 minimum, a server must be specified.
 
-    $ ./mutilate -s localhost
+    $ ./mcperf -s localhost
     #type       avg     min     1st     5th    10th    90th    95th    99th
     read       52.4    41.0    43.1    45.2    48.1    55.8    56.6    71.5
     update      0.0     0.0     0.0     0.0     0.0     0.0     0.0     0.0
@@ -45,11 +44,11 @@ Mutilate reports the latency (average, minimum, and various
 percentiles) for get and set commands, as well as achieved QPS and
 network goodput.
 
-To achieve high request rate, you must configure mutilate to use
+To achieve high request rate, you must configure mcperf to use
 multiple threads, multiple connections, connection pipelining, or
 remote agents.
 
-    $ ./mutilate -s zephyr2-10g -T 24 -c 8
+    $ ./mcperf -s zephyr2-10g -T 24 -c 8
     #type       avg     min     1st     5th    10th    90th    95th    99th
     read      598.8    86.0   437.2   466.6   482.6   977.0  1075.8  1170.6
     update      0.0     0.0     0.0     0.0     0.0     0.0     0.0     0.0
@@ -67,42 +66,42 @@ Suggested Usage
 
 Real deployments of memcached often handle the requests of dozens,
 hundreds, or thousands of front-end clients simultaneously.  However,
-by default, mutilate establishes one connection per server and meters
+by default, mcperf establishes one connection per server and meters
 requests one at a time (it waits for a reply before sending the next
 request).  This artificially limits throughput (i.e. queries per
 second), as the round-trip network latency is almost certainly far
 longer than the time it takes for the memcached server to process one
 request.
 
-In order to get reasonable benchmark results with mutilate, it needs
+In order to get reasonable benchmark results with mcperf, it needs
 to be configured to more accurately portray a realistic client
 workload.  In general, this means ensuring that (1) there are a large
 number of client connections, (2) there is the potential for a large
 number of outstanding requests, and (3) the memcached server saturates
-and experiences queuing delay far before mutilate does. I suggest the
+and experiences queuing delay far before mcperf does. I suggest the
 following guidelines:
 
 1. Establish on the order of 100 connections per memcached _server_
 thread.
-2. Don't exceed more than about 16 connections per mutilate thread.
-3. Use multiple mutilate agents in order to achieve (1) and (2).
-4. Do not use more mutilate threads than hardware cores/threads.
+2. Don't exceed more than about 16 connections per mcperf thread.
+3. Use multiple mcperf agents in order to achieve (1) and (2).
+4. Do not use more mcperf threads than hardware cores/threads.
 5. Use -Q to configure the "master" agent to take latency samples at
 slow, a constant rate.
 
 Here's an example:
 
     memcached_server$ memcached -t 4 -c 32768
-    agent1$ mutilate -T 16 -A
-    agent2$ mutilate -T 16 -A
-    agent3$ mutilate -T 16 -A
-    agent4$ mutilate -T 16 -A
-    agent5$ mutilate -T 16 -A
-    agent6$ mutilate -T 16 -A
-    agent7$ mutilate -T 16 -A
-    agent8$ mutilate -T 16 -A
-    master$ mutilate -s memcached_server --loadonly
-    master$ mutilate -s memcached_server --noload \
+    agent1$ mcperf -T 16 -A
+    agent2$ mcperf -T 16 -A
+    agent3$ mcperf -T 16 -A
+    agent4$ mcperf -T 16 -A
+    agent5$ mcperf -T 16 -A
+    agent6$ mcperf -T 16 -A
+    agent7$ mcperf -T 16 -A
+    agent8$ mcperf -T 16 -A
+    master$ mcperf -s memcached_server --loadonly
+    master$ mcperf -s memcached_server --noload \
         -B -T 16 -Q 1000 -D 4 -C 4 \
         -a agent1 -a agent2 -a agent3 -a agent4 \
         -a agent5 -a agent6 -a agent7 -a agent8 \
@@ -116,9 +115,9 @@ client-side queuing delay adulterating the latency measurements.
 Command-line Options
 ====================
 
-    mutilate3 0.1
+    mcperf3 0.1
     
-    Usage: mutilate -s server[:port] [options]
+    Usage: mcperf -s server[:port] [options]
     
     "High-performance" memcached benchmarking tool
     

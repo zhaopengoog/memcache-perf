@@ -1,11 +1,4 @@
-ifndef LIBPATH
-LIBPATH=$(shell echo "$$HOME/clouds/lib")
-endif
-LIBPATHFLAG=-L$(LIBPATH)
-ifndef INCPATH
-INCPATH=$(shell echo "$$HOME/clouds/include")
-endif
-INCPATHFLAG=-I$(INCPATH)
+VERSION=0.1
 LIBS=-levent -lpthread -lrt -lzmq
 CXXFLAGS= -g -std=c++0x -D_GNU_SOURCE -O3 $(INCPATHFLAG)
 HEADERS= AdaptiveSampler.h barrier.h cmdline.h Connection.h ConnectionStats.h \
@@ -17,14 +10,12 @@ CFILES= barrier.cc  cmdline.cc  Connection.cc  distributions.cc  \
 SRCS=$(HEADERS) $(CFILES)
 OBJS=mutilate.o cmdline.o log.o distributions.o util.o Connection.o Generator.o cpu_stat_thread.o
 
-mutilate: $(OBJS)
-	export LD_RUN_PATH=$(LIBPATH) && g++ -o mutilate $(OBJS) $(LIBPATHFLAG) $(LIBS)
+mcperf: $(OBJS)
+	export LD_RUN_PATH=$(LIBPATH) && g++ -o mcperf $(OBJS) $(LIBPATHFLAG) $(LIBS)
 
 clean:
 	rm -f *.o mutilate
 
-release: mutilate.tgz
-	cp mutilate.tgz ../ansible/roles/memcache_clients/files
+memcache-perf.tgz: $(SRCS)
+	tar --transform=s,^,memcache-perf-$(VERSION)/, -cvzf memcache-perf-$(VERSION).tgz *.cc *.h Makefile COPYING README.md 
 
-mutilate.tgz: $(SRCS)
-	tar --transform=s,^,mutilate/, -cvzf mutilate.tgz *.cc *.h Makefile COPYING README.md 
