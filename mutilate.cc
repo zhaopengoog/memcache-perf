@@ -692,7 +692,7 @@ int main(int argc, char **argv) {
     if (avgseek) I("Search-mode.  Find QPS @ %dus avg latency.", x, n);
     else I("Search-mode.  Find QPS @ %dus %dth percentile.", x, n);
 
-    int high_qps = 2000000;
+    int high_qps = 10000000;
     int low_qps = 1; // 5000;
     double nth;
     int cur_qps;

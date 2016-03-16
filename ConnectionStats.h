@@ -26,7 +26,7 @@ class ConnectionStats {
 #elif defined(USE_HISTOGRAM_SAMPLER)
    get_sampler(10000,1), set_sampler(10000,1), op_sampler(1000,1),
 #else
-   get_sampler(2000), set_sampler(2000), op_sampler(100),
+   get_sampler(2000), set_sampler(2000), op_sampler(2000),
 #endif
    rx_bytes(0), tx_bytes(0), gets(0), sets(0), start(0), stop(0),
    get_misses(0), skips(0), sampling(_sampling) {}
