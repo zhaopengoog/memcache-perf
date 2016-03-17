@@ -482,6 +482,13 @@ int sync_agent(zmq::socket_t* socket) {
     if (rep.compare(string("sync")) != 0) {
         W("sync_agent[M]: out of sync [1] for agent %d expected sync got %s",aid,rep.c_str());
 		errors++;
+		if (rep.compare("FAIL-RECV") == 0) {
+			W("Agent failure detected, skip agent %d!",aid);
+			its=agent_sockets.erase(its); // remove from list of active agents
+			delete(s);
+			its--; // adjust the iterator since we did not iterate over the next agent
+		}
+
 	}
    }
 	aid=0;
@@ -498,6 +505,12 @@ int sync_agent(zmq::socket_t* socket) {
     if (rep.compare(string("ack")) != 0) {
         W("sync_agent[M]: out of sync [2] for agent %d expected ack got %s",aid,rep.c_str());
 		errors++;
+		if (rep.compare("FAIL-RECV") == 0) {
+			W("Agent failure detected, skip agent %d!",aid);
+			its=agent_sockets.erase(its); // remove from list of active agents
+			delete(s);
+			its--; // adjust the iterator since we did not iterate over the next agent
+		}
 	}
    }
   } else if (args.agentmode_given) {
