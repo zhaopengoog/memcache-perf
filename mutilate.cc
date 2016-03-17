@@ -705,6 +705,7 @@ int main(int argc, char **argv) {
     if (avgseek) I("Search-mode.  Find QPS @ %dus avg latency.", x, n);
     else I("Search-mode.  Find QPS @ %dus %dth percentile.", x, n);
 
+	//first determine max qps without paying attention to latency. 
     int high_qps = 10000000;
     int low_qps = 1; // 5000;
     double nth;
@@ -719,9 +720,11 @@ int main(int argc, char **argv) {
     cur_qps = stats.get_qps();
 
     I("peak qps = % 8d, %s = %.1f", high_qps, n_ptr, nth);
+	//if latency at peak more then requested, search for requested latency setting to middle point between current and a point with known good latency
+	//continue searching until the boundary between known good and current is ~5%
 
     if (nth > x) {
-    while ((high_qps > low_qps * 1.03) && cur_qps > (peak_qps * .01)) {
+    while ((high_qps > low_qps * 1.02) && cur_qps > (peak_qps * .01)) {
       cur_qps = (high_qps + low_qps) / 2;
 
       args_to_options(&options);
@@ -742,10 +745,10 @@ int main(int argc, char **argv) {
       else low_qps = cur_qps;
     }
 
-    //    while (nth > x && cur_qps > 10000) { // > low_qps) { // 10000) {
-      //    while (nth > x && cur_qps > 10000 && cur_qps > (low_qps * 0.90)) {
-    while (nth > x && cur_qps > (peak_qps * .01) && cur_qps > (low_qps * 0.03)) {
-      cur_qps = cur_qps * 98 / 100;
+	// now if last value found at conversion has latency over the limit, use the last value before latency came within bounds, 
+	// and decrease requested qps by 1% until latency comes within bounds, or we go below 90% of previously found value.
+    while (nth > x && cur_qps > (peak_qps * .01) && cur_qps > (low_qps * 0.90)) {
+      cur_qps = cur_qps * 99 / 100;
 
       args_to_options(&options);
 
