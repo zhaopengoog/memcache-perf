@@ -135,9 +135,9 @@ class ConnectionStats {
   }
 
   static void print_header() {
-    printf("%-7s %7s %7s %7s %7s %7s %7s %7s %7s %7s\n",
+    printf("%-7s %7s %7s %7s %7s %7s %7s %7s %7s %7s %7s %7s\n",
            "#type", "avg", "std", "min", /*"1st",*/ "5th", "10th",
-           "90th", "95th", "99th", "p999");
+           "50th","67th","90th", "95th", "99th", "p999");
   }
 
 #ifdef USE_ADAPTIVE_SAMPLER
@@ -211,10 +211,10 @@ class ConnectionStats {
       return;
     }
 
-    printf("%-7s %7.1f %7.1f %7.1f %7.1f %7.1f %7.1f %7.1f %7.1f %7.1f",
+    printf("%-7s %7.1f %7.1f %7.1f %7.1f %7.1f %7.1f %7.1f %7.1f %7.1f %7.1f %7.1f",
            tag, sampler.average(), sampler.stddev(),
            sampler.get_nth(0), /*sampler.get_nth(1),*/ sampler.get_nth(5),
-           sampler.get_nth(10), sampler.get_nth(90),
+           sampler.get_nth(10), sampler.get_nth(50), sampler.get_nth(67), sampler.get_nth(90),
            sampler.get_nth(95), sampler.get_nth(99), sampler.get_knth(999));
 
     if (newline) printf("\n");

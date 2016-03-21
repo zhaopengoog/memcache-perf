@@ -1073,7 +1073,7 @@ void do_mutilate(const vector<string>& servers, options_t& options,
   delay.tv_sec = 4;
   delay.tv_usec = 0;
 
-  V("evt based loop start\n");
+  D("evt based loop start\n");
   while (1) {
     // FIXME: If all connections become ready before event_base_loop
     // is called, this will deadlock.
@@ -1096,7 +1096,7 @@ void do_mutilate(const vector<string>& servers, options_t& options,
     if (restart) continue;
     else break;
   }
-  V("evt based loop end\n");
+  D("evt based loop end\n");
 
   // Load database on lead connection for each server.
   if (!options.noload) {
