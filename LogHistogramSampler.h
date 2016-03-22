@@ -69,31 +69,15 @@ public:
   }
 
   double get_nth(double nth) {
-    if (nth > 99.0) {
-      return get_knth(nth);
-    }
-
     uint64_t count = total();
     uint64_t n = 0;
     double target = count * nth/100;
-
-    for (size_t i = 0; i < bins.size(); i++) {
-      n += bins[i];
-
-      if (n > target) { // The nth is inside bins[i].
-        double left = target - (n - bins[i]);
-        return pow(_POW, (double) i) +
-          left / bins[i] * (pow(_POW, (double) (i+1)) - pow(_POW, (double) i));
-      }
+    if (nth>100.0) {
+	target = count * nth/1000;
     }
-
-    return pow(_POW, bins.size());
-  } 
-
-  double get_knth(double nth) {
-    uint64_t count = total();
-    uint64_t n = 0;
-    double target = count * nth/1000;
+    if (nth>1000.0) {
+	target = count * nth/10000;
+    }
 
     for (size_t i = 0; i < bins.size(); i++) {
       n += bins[i];

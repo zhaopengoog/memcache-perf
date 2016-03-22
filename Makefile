@@ -10,6 +10,7 @@ CFILES= barrier.cc  cmdline.cc  Connection.cc  distributions.cc  \
 SRCS=$(HEADERS) $(CFILES)
 OBJS=mutilate.o cmdline.o log.o distributions.o util.o Connection.o Generator.o cpu_stat_thread.o
 
+
 mcperf: $(OBJS)
 	export LD_RUN_PATH=$(LIBPATH) && g++ -o mcperf $(OBJS) $(LIBPATHFLAG) $(LIBS)
 
@@ -19,3 +20,10 @@ clean:
 memcache-perf.tgz: $(SRCS)
 	tar --transform=s,^,memcache-perf-$(VERSION)/, -cvzf memcache-perf-$(VERSION).tgz *.cc *.h Makefile COPYING README.md 
 
+%.d: %.cc
+	@set -e; rm -f $@; \
+	$(CC) -MM $(CXXFLAGS) $< > $@.$$$$; \
+	sed 's,\($*\)\.o[ :]*,\1.o $@ : ,g' < $@.$$$$ > $@; \
+	rm -f $@.$$$$
+
+include $(CFILES:.cc=.d)

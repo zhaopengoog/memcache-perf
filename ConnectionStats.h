@@ -20,6 +20,8 @@ using namespace std;
 
 class ConnectionStats {
  public:
+ static int details[];
+ static int ndetails;
  ConnectionStats(bool _sampling = true) :
 #ifdef USE_ADAPTIVE_SAMPLER
    get_sampler(100000), set_sampler(100000), op_sampler(100000),
@@ -29,7 +31,8 @@ class ConnectionStats {
    get_sampler(2000), set_sampler(2000), op_sampler(2000),
 #endif
    rx_bytes(0), tx_bytes(0), gets(0), sets(0), start(0), stop(0),
-   get_misses(0), skips(0), sampling(_sampling) {}
+   get_misses(0), skips(0), sampling(_sampling) {
+   }
 
 #ifdef USE_ADAPTIVE_SAMPLER
   AdaptiveSampler<Operation> get_sampler;
@@ -135,9 +138,15 @@ class ConnectionStats {
   }
 
   static void print_header() {
-    printf("%-7s %7s %7s %7s %7s %7s %7s %7s %7s %7s %7s %7s\n",
-           "#type", "avg", "std", "min", /*"1st",*/ "5th", "10th",
-           "50th","67th","90th", "95th", "99th", "p999");
+	  int i;
+    printf("%-7s %7s %7s %7s",
+           "#type", "avg", "std", "min");
+	for (i=0; i<ndetails; i++) {
+		char buf[8];
+		sprintf(buf,"p%d",details[i]); 
+		printf(" %7s",buf);
+	}
+	printf("\n");
   }
 
 #ifdef USE_ADAPTIVE_SAMPLER
@@ -204,18 +213,24 @@ class ConnectionStats {
 #else
   void print_stats(const char *tag, LogHistogramSampler &sampler,
                    bool newline = true) {
+	int i;
     if (sampler.total() == 0) {
-      printf("%-7s %7.1f %7.1f %7.1f %7.1f %7.1f %7.1f %7.1f %7.1f",
-             tag, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
+      printf("%-7s %7.1f %7.1f %7.1f",
+             tag, 0.0, 0.0, 0.0);
+		for (i=0; i<ndetails; i++) {
+			printf(" %7.1f",0.0);
+		}
+			 
       if (newline) printf("\n");
       return;
     }
 
-    printf("%-7s %7.1f %7.1f %7.1f %7.1f %7.1f %7.1f %7.1f %7.1f %7.1f %7.1f %7.1f",
+    printf("%-7s %7.1f %7.1f %7.1f",
            tag, sampler.average(), sampler.stddev(),
-           sampler.get_nth(0), /*sampler.get_nth(1),*/ sampler.get_nth(5),
-           sampler.get_nth(10), sampler.get_nth(50), sampler.get_nth(67), sampler.get_nth(90),
-           sampler.get_nth(95), sampler.get_nth(99), sampler.get_knth(999));
+           sampler.get_nth(0));
+		for (i=0; i<ndetails; i++) {
+			printf(" %7.1f",sampler.get_nth(details[i]));
+		}
 
     if (newline) printf("\n");
   }

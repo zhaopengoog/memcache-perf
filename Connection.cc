@@ -10,6 +10,7 @@
 #include "config.h"
 
 #include "Connection.h"
+#include "ConnectionStats.h"
 #include "distributions.h"
 #include "Generator.h"
 #include "mutilate.h"
@@ -18,6 +19,9 @@
 
 #define MAX_KEY_LEN 48
 #define MAX_MGET_KEYS 512
+
+int ConnectionStats::details[]={5,10,50,67,75,80,85,90,95,99,999,9999};
+int ConnectionStats::ndetails=sizeof(ConnectionStats::details)/sizeof(int);
 
 Connection::Connection(struct event_base* _base, struct evdns_base* _evdns,
                        string _hostname, string _port, options_t _options,
