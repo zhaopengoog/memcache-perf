@@ -137,7 +137,7 @@ class ConnectionStats {
     stop = as.stop;
   }
 
-  static void print_header() {
+  static void print_header(bool newline=true) {
 	  int i;
     printf("%-7s %7s %7s %7s",
            "#type", "avg", "std", "min");
@@ -146,7 +146,8 @@ class ConnectionStats {
 		sprintf(buf,"p%d",details[i]); 
 		printf(" %7s",buf);
 	}
-	printf("\n");
+	if (newline) 
+			printf("\n");
   }
 
 #ifdef USE_ADAPTIVE_SAMPLER

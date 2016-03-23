@@ -28,7 +28,7 @@ void setup_socket_timers(unsigned int max,  unsigned int ptime);
 
 const char *gengetopt_args_info_purpose = "";
 
-const char *gengetopt_args_info_usage = "Usage: mutilate -s server[:port] [options]";
+const char *gengetopt_args_info_usage = "Usage: mcperf -s server[:port] [options]";
 
 const char *gengetopt_args_info_description = "\"High-performance\" memcached benchmarking tool";
 

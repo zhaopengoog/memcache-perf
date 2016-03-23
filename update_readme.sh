@@ -13,7 +13,7 @@ echo "Command-line Options" >> README.md.new
 echo "====================" >> README.md.new
 echo >> README.md.new
 
-./mutilate --help | sed "s/^/    /" >> README.md.new
+./mcperf --help | sed "s/^/    /" >> README.md.new
 
 mv -f README.md.new README.md
 

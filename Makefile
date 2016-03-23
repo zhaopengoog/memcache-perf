@@ -2,13 +2,13 @@ VERSION=0.1
 LIBS=-levent -lpthread -lrt -lzmq
 CXXFLAGS= -g -std=c++0x -D_GNU_SOURCE -O3 $(INCPATHFLAG)
 HEADERS= AdaptiveSampler.h barrier.h cmdline.h Connection.h ConnectionStats.h \
- Generator.h log.h mutilate.h util.h AgentStats.h binary_protocol.h \
+ Generator.h log.h mcperf.h util.h AgentStats.h binary_protocol.h \
  config.h ConnectionOptions.h distributions.h \
  HistogramSampler.h LogHistogramSampler.h Operation.h cpu_stat_thread.h
 CFILES= barrier.cc  cmdline.cc  Connection.cc  distributions.cc  \
- Generator.cc  log.cc  mutilate.cc  TestGenerator.cc  util.cc cpu_stat_thread.cc
+ Generator.cc  log.cc  mcperf.cc  TestGenerator.cc  util.cc cpu_stat_thread.cc
 SRCS=$(HEADERS) $(CFILES)
-OBJS=mutilate.o cmdline.o log.o distributions.o util.o Connection.o Generator.o cpu_stat_thread.o
+OBJS=mcperf.o cmdline.o log.o distributions.o util.o Connection.o Generator.o cpu_stat_thread.o
 DEPFILES=$(CFILES:.cc=.d)
 
 mcperf: Makefile $(OBJS)
