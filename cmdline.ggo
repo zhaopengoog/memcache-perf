@@ -1,6 +1,6 @@
-package "mutilate"
+package "mcperf"
 version "0.1"
-usage "mutilate -s server[:port] [options]"
+usage "mcperf -s server[:port] [options]"
 description "\"High-performance\" memcached benchmarking tool"
 
 args "-c cc --show-required -C --default-optional -l"
@@ -73,6 +73,10 @@ overrides --connections." int
 option "measure_qps" Q "Explicitly set master client QPS, \
 spread across threads and connections." int
 option "measure_depth" D "Set master client connection depth." int
+option "poll_freq" m "Set frequency for agent protocol recv polling." int
+option "poll_max" m "Set timeout for agent protocol recv polling. An agent not responding within time limit will be dropped." int
+option "getq_size" m "Size of queue for multiget requests." int
+option "getq_freq" m "Frequency of multiget requests." int
 
 text "
 The --measure_* options aid in taking latency measurements of the

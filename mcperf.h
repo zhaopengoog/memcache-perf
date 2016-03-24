@@ -1,5 +1,5 @@
-#ifndef MUTILATE_H
-#define MUTILATE_H
+#ifndef MCPERF_H
+#define MCPERF_H
 
 #include "cmdline.h"
 
@@ -14,4 +14,4 @@
 extern char random_char[];
 extern gengetopt_args_info args;
 
-#endif // MUTILATE_H
+#endif // MCPERF_H

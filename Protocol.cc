@@ -13,7 +13,7 @@
 #include "Connection.h"
 #include "distributions.h"
 #include "Generator.h"
-#include "mutilate.h"
+#include "mcperf.h"
 #include "binary_protocol.h"
 #include "util.h"
 
