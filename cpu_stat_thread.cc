@@ -78,12 +78,12 @@ void *cpu_stat_thread(void *pdata) {
 			min=loadavg;
 		count+=1.0;
 		total+=loadavg;
-		if (print_all_cpu_stats)
-			printf("The current CPU utilization is : %Lf\n",loadavg);
-    }
 	data->max=	max*100.0;
 	data->min=	min*100.0;
 	data->avg=	total*100.0 / count;
+		if (print_all_cpu_stats)
+			printf("The current CPU utilization is : %Lf\n",loadavg);
+    }
 
 #ifndef DISABLE_WARNING	
 	if (max > .95) 

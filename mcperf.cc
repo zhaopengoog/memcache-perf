@@ -100,6 +100,43 @@ int noblock_flag=ZMQ_NOBLOCK;
 int noblock_flag=ZMQ_DONTWAIT;
 #endif
 
+void tokenize(const string& str,
+                      vector<string>& tokens,
+                      const string& delimiters = ",")
+{
+    // Skip delimiters at beginning.
+    string::size_type lastPos = str.find_first_not_of(delimiters, 0);
+    // Find first "non-delimiter".
+    string::size_type pos     = str.find_first_of(delimiters, lastPos);
+
+    while (string::npos != pos || string::npos != lastPos)
+    {
+        // Found a token, add it to the vector.
+        tokens.push_back(str.substr(lastPos, pos - lastPos));
+        // Skip delimiters.  Note the "not_of"
+        lastPos = str.find_first_not_of(delimiters, pos);
+        // Find next "non-delimiter"
+        pos = str.find_first_of(delimiters, lastPos);
+    }
+}
+void deTokenize(string& str,
+                      const vector<string>& tokens,
+                      const string& delimiter = ",")
+{
+    vector<string>::const_iterator it;
+	//collect all tokens to a single string
+	it=tokens.begin();
+	str=*it;
+	it++;
+    for ( ; 
+	 it != tokens.end() ; 
+	 it++) 
+	 {
+		str += delimiter;
+		str += *it;
+	 }
+}
+
 bool poll_recv(zmq::socket_t &socket, zmq::message_t *msg) {
 	unsigned int timer=max_poll_time;
 	bool status=false;
@@ -261,12 +298,19 @@ V("sent num %d",lid);
     memcpy(&options, request.data(), sizeof(options));
 V("Got options: %d %s",options.connections,options.loadonly ? "loadonly" : options.noload ? "noload" : "");
 
+	//get a string containing the servers, and parse it to extract all servers
+	string server_opt=s_recv(socket);
+    vector<string> servers;
+	tokenize(server_opt,servers);
+    s_send(socket, "ack");
+/*
     vector<string> servers;
 
     for (int i = 0; i < options.server_given; i++) {
       servers.push_back(s_recv(socket));
       s_send(socket, "ack");
     }
+*/
 V("sent ack");
     vector<string>::iterator i;
 
@@ -353,8 +397,18 @@ V("Agent %d prep recv= %s", aid, status?"true":"false");
     sum += options.connections * (options.roundrobin ?
             (servers.size() > num ? servers.size() : num) : 
             (servers.size() * num));
-    vector<string>::const_iterator it;
 	int itid=0;
+	//collect all servers to a single msg
+	string all_servers;
+	deTokenize(all_servers,servers);
+	//send servers msg to agent and wait for ack
+	s_send(*s, all_servers);
+	string response = s_recv(*s);
+	if (response.compare("FAIL-RECV") == 0) {
+		itid=-1;
+	}
+/*
+    vector<string>::const_iterator it;
     for (it = servers.begin() ; 
 	 it != servers.end() ; 
 	 it++) 
@@ -367,6 +421,7 @@ V("Agent %d prep recv= %s", aid, status?"true":"false");
 	  }
 	  itid++;
     }
+*/
 	// in case communication with agent broke down, remove from active list
 	if (itid<0) {
 		W("Agent failure detected, skip agent %d!",aid);
@@ -398,8 +453,6 @@ V("Agent %d prep recv= %s", aid, status?"true":"false");
 
   for ( its=agent_sockets.begin(); its!=agent_sockets.end(); its++ ) {
     zmq::socket_t *s=*its;
-  //for (auto s: agent_sockets) {
-  //
     zmq::message_t message(sizeof(sum));
     *((int *) message.data()) = sum;
     poll_send(*s,message);
@@ -790,13 +843,14 @@ int main(int argc, char **argv) {
       //        args.server_given /
       //        (args.threads_arg < 1 ? 1 : args.threads_arg);
 
-      stats = ConnectionStats();
+      	stats = ConnectionStats();
+	reset_cpu_stats();
+      	go(servers, options, stats);
+	printf("CPU Usage Stats (avg/min/max): %.2Lf%%,%.2Lf%%,%.2Lf%%\n",cpustat.avg,cpustat.min,cpustat.max);
 
-      go(servers, options, stats);
-
-      stats.print_stats("read", stats.get_sampler, false);
-      printf(" %8.1f", stats.get_qps());
-      printf(" %8d\n", q);
+      	stats.print_stats("read", stats.get_sampler, false);
+      	printf(" %8.1f", stats.get_qps());
+      	printf(" %8d\n", q);
     }    
   } else {
     go(servers, options, stats);
