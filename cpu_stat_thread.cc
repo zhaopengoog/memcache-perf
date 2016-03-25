@@ -6,9 +6,13 @@
 static int capture_period=1;
 static int print_all_cpu_stats=0;
 static volatile int g_stop_cpu_stats=0;
+static volatile int g_reset_cpu_stats=0;
 
 void stop_cpu_stats() {
 	g_stop_cpu_stats=1;
+}
+void reset_cpu_stats() {
+	g_reset_cpu_stats=1;
 }
 
 void detail_cpu_stats(int level) {
@@ -61,6 +65,13 @@ void *cpu_stat_thread(void *pdata) {
 		if (g_stop_cpu_stats)
 			break;
 		loadavg=get_cpu_load();
+		if (g_reset_cpu_stats) {
+			g_reset_cpu_stats=0;
+			count=0;
+			total=0;
+			max=loadavg;
+			min=loadavg;
+		}
 		if (loadavg > max) 
 			max=loadavg;
 		if (loadavg < min)

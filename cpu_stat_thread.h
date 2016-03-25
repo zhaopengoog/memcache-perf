@@ -35,5 +35,6 @@ void *cpu_stat_thread(void *pdata);
 void stop_cpu_stats();
 void cpu_stats_detail(int level);
 void cpu_stats_interval(int interval);
+void reset_cpu_stats();
 
 #endif
