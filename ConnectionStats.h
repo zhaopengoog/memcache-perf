@@ -28,7 +28,7 @@ class ConnectionStats {
 #elif defined(USE_HISTOGRAM_SAMPLER)
    get_sampler(10000,1), set_sampler(10000,1), op_sampler(1000,1),
 #else
-   get_sampler(2000), set_sampler(2000), op_sampler(2000),
+   get_sampler(LOGSAMPLER_BINS), set_sampler(LOGSAMPLER_BINS), op_sampler(LOGSAMPLER_BINS),
 #endif
    rx_bytes(0), tx_bytes(0), gets(0), sets(0), start(0), stop(0),
    get_misses(0), skips(0), sampling(_sampling) {
@@ -132,6 +132,13 @@ class ConnectionStats {
     sets += as.sets;
     get_misses += as.get_misses;
     skips += as.skips;
+
+#ifdef LOGSAMPLER_BINS
+	for (int i=0; i<LOGSAMPLER_BINS; i++) 
+		get_sampler.bins[i]	+=	as.get_bins[i];
+	get_sampler.sum 	+=	as.get_sum;
+	get_sampler.sum_sq	+=	as.get_sum_sq;
+#endif
 
     start = as.start;
     stop = as.stop;

@@ -11,7 +11,10 @@
 #include "mcperf.h"
 #include "Operation.h"
 
-#define _POW 1.1
+//increase resolution slightly for the range of ~10ms
+#define _POW 1.08
+//at bin 200 the latency is >4s
+#define LOGSAMPLER_BINS 200
 
 class LogHistogramSampler {
 public:

@@ -140,7 +140,7 @@ void deTokenize(string& str,
 bool poll_recv(zmq::socket_t &socket, zmq::message_t *msg) {
 	unsigned int timer=max_poll_time;
 	bool status=false;
-	V("- recv"); //TODO:DBG
+	D("- recv"); 
 	//if no timeout, just block
 	if (timer == 0) { 
 		return socket.recv(msg);
@@ -175,7 +175,7 @@ bool poll_recv(zmq::socket_t &socket, zmq::message_t *msg) {
 bool poll_send(zmq::socket_t &socket, zmq::message_t &msg) {
 	unsigned int timer=max_poll_time;
 	bool status=false;
-	V("- send"); //TODO:DBG
+	D("- send"); 
 	//if no timeout, just block
 #if 1
 	return socket.send(msg);
@@ -334,7 +334,7 @@ V("sent tnx");
     //    if (options.threads > 1)
       pthread_barrier_init(&barrier, NULL, options.threads);
 
-    ConnectionStats stats;
+    ConnectionStats stats = ConnectionStats();
 V("launching go");
 
     go(servers, options, stats, &socket);
@@ -349,6 +349,12 @@ V("Done run.");
     as.start = stats.start;
     as.stop = stats.stop;
     as.skips = stats.skips;
+#ifdef LOGSAMPLER_BINS
+	for (int i=0; i<LOGSAMPLER_BINS; i++) 
+		as.get_bins[i]=stats.get_sampler.bins[i];
+	as.get_sum = stats.get_sampler.sum;
+	as.get_sum_sq = stats.get_sampler.sum_sq;
+#endif	
 
     string req = s_recv(socket);
     V("req = %s", req.c_str());
@@ -356,6 +362,13 @@ V("Done run.");
     memcpy(request.data(), &as, sizeof(as));
     socket.send(request);
     V("send = %s", req.c_str());
+	if (log_level > DEBUG) {
+		stats.print_header(false);
+		printf(" QPS\n");
+		stats.print_stats("read",   stats.get_sampler,false);
+		printf(" %8.1f\n", stats.get_qps());
+	}
+
   }
 }
 
@@ -380,11 +393,11 @@ void prep_agent(const vector<string>& servers, options_t& options) {
 V("Agent %d prep ", aid);
     memcpy((void *) message.data(), &options, sizeof(options_t));
     status=poll_send(*s,message);
-V("Agent %d prep send = %s", aid, status?"true":"false");
+D("Agent %d prep send = %s", aid, status?"true":"false");
 
     zmq::message_t rep;
     status=poll_recv(*s,&rep);
-V("Agent %d prep recv= %s", aid, status?"true":"false");
+D("Agent %d prep recv= %s", aid, status?"true":"false");
 	if (!status) { // problem communicating with this agent, don't use it!
 		W("Agent failure detected, skip agent %d!",aid);
 		its=agent_sockets.erase(its); // remove from list of active agents
@@ -481,13 +494,13 @@ void finish_agent(ConnectionStats &stats) {
 	aid++;
 	bool status;
     status=s_send(*s, "stats");
-V("Agent %d finish send = %s", aid, status?"true":"false");
+D("Agent %d finish send = %s", aid, status?"true":"false");
 
     AgentStats as;
     zmq::message_t message;
 
     status=poll_recv(*s,&message);
-V("Agent %d finish recv = %s", aid, status?"true":"false");
+D("Agent %d finish recv = %s", aid, status?"true":"false");
     memcpy(&as, message.data(), sizeof(as));
     stats.accumulate(as);
   }
@@ -524,7 +537,7 @@ int sync_agent(zmq::socket_t* socket) {
    for ( its=agent_sockets.begin(); its!=agent_sockets.end(); its++ ) {
     zmq::socket_t *s=*its;
       s_send(*s, "sync_req");
-	  V("Sent sync_req to agent %d",++aid);
+	  D("Sent sync_req to agent %d",++aid);
    }
 	aid=0;
 
@@ -548,7 +561,7 @@ int sync_agent(zmq::socket_t* socket) {
    for ( its=agent_sockets.begin(); its!=agent_sockets.end(); its++ ) {
     zmq::socket_t *s=*its;
       s_send(*s, "proceed");
-	V("Sent proceed to agent %d",++aid);
+	D("Sent proceed to agent %d",++aid);
    }
     /* End sync */
 	aid=0;
@@ -1112,7 +1125,7 @@ void do_mcperf(const vector<string>& servers, options_t& options,
 
     for (int c = 0; c < conns; c++) {
       Connection* conn = new Connection(base, evdns, hostname, port, options,
-                                        args.agentmode_given ? false :
+                                        args.agentmode_given ? true :
                                         true);
       connections.push_back(conn);
       if (c == 0) server_lead.push_back(conn);
