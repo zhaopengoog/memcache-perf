@@ -28,21 +28,26 @@ Type './mcperf -h' for a full list of command-line options.  At
 minimum, a server must be specified.
 
     $ ./mcperf -s localhost
-    #type       avg     min     1st     5th    10th    90th    95th    99th
-    read       52.4    41.0    43.1    45.2    48.1    55.8    56.6    71.5
-    update      0.0     0.0     0.0     0.0     0.0     0.0     0.0     0.0
-    op_q        1.5     1.0     1.0     1.1     1.1     1.9     2.0     2.0
-    
-    Total QPS = 18416.6 (92083 / 5.0s)
-    
-    Misses = 0 (0.0%)
-    
-    RX   22744501 bytes :    4.3 MB/s
-    TX    3315024 bytes :    0.6 MB/s
+#type       avg     std     min      p5     p10     p50     p67     p75     p80     p85     p90     p95     p99    p999   p9999
+read       62.2    24.1    54.7    59.1    59.4    61.5    62.3    62.8    63.0    63.3    63.5    63.8    68.8    80.2  1012.5
+update      0.0     0.0     0.0     0.0     0.0     0.0     0.0     0.0     0.0     0.0     0.0     0.0     0.0     0.0     0.0
+op_q        1.0     0.0     1.0     1.0     1.0     1.0     1.1     1.1     1.1     1.1     1.1     1.1     1.1     1.1     1.1
 
-Mutilate reports the latency (average, minimum, and various
+Total QPS = 16082.2 (80411 / 5.0s)
+
+Misses = 0 (0.0%)
+Skipped TXs = 0 (0.0%)
+
+RX   19861517 bytes :    3.8 MB/s
+TX    2894832 bytes :    0.6 MB/s
+CPU Usage Stats (avg/min/max): 2.21%,0.38%,4.05%
+
+mcperf reports the latency (average, minimum, and various
 percentiles) for get and set commands, as well as achieved QPS and
-network goodput.
+network goodput. A separate thread is also keeping track of client CPU usage on the master.
+A warning will be issued if the master client CPU usage goes above 95%.
+In that case, it is recommended to add more machines as agents.
+If verbose (-v) flag is enabled on the an agent, it will report it's cpu usage as well.
 
 To achieve high request rate, you must configure mcperf to use
 multiple threads, multiple connections, connection pipelining, or
@@ -81,13 +86,12 @@ number of outstanding requests, and (3) the memcached server saturates
 and experiences queuing delay far before mcperf does. I suggest the
 following guidelines:
 
-1. Establish on the order of 100 connections per memcached _server_
+1. Establish more than 50 connections per memcached _server_
 thread.
-2. Don't exceed more than about 16 connections per mcperf thread.
+2. Don't exceed more than about 10 connections per _mcperf_ thread.
 3. Use multiple mcperf agents in order to achieve (1) and (2).
 4. Do not use more mcperf threads than hardware cores/threads.
-5. Use -Q to configure the "master" agent to take latency samples at
-slow, a constant rate.
+
 
 Here's an example:
 
@@ -115,7 +119,7 @@ client-side queuing delay adulterating the latency measurements.
 Command-line Options
 ====================
 
-    mcperf3 0.1
+    mcperf 0.2
     
     Usage: mcperf -s server[:port] [options]
     
