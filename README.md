@@ -28,19 +28,19 @@ Type './mcperf -h' for a full list of command-line options.  At
 minimum, a server must be specified.
 
     $ ./mcperf -s localhost
-#type       avg     std     min      p5     p10     p50     p67     p75     p80     p85     p90     p95     p99    p999   p9999
-read       62.2    24.1    54.7    59.1    59.4    61.5    62.3    62.8    63.0    63.3    63.5    63.8    68.8    80.2  1012.5
-update      0.0     0.0     0.0     0.0     0.0     0.0     0.0     0.0     0.0     0.0     0.0     0.0     0.0     0.0     0.0
-op_q        1.0     0.0     1.0     1.0     1.0     1.0     1.1     1.1     1.1     1.1     1.1     1.1     1.1     1.1     1.1
+	#type       avg     std     min      p5     p10     p50     p67     p75     p80     p85     p90     p95     p99    p999   p9999
+	read       62.2    24.1    54.7    59.1    59.4    61.5    62.3    62.8    63.0    63.3    63.5    63.8    68.8    80.2  1012.5
+	update      0.0     0.0     0.0     0.0     0.0     0.0     0.0     0.0     0.0     0.0     0.0     0.0     0.0     0.0     0.0
+	op_q        1.0     0.0     1.0     1.0     1.0     1.0     1.1     1.1     1.1     1.1     1.1     1.1     1.1     1.1     1.1
 
-Total QPS = 16082.2 (80411 / 5.0s)
+	Total QPS = 16082.2 (80411 / 5.0s)
 
-Misses = 0 (0.0%)
-Skipped TXs = 0 (0.0%)
+	Misses = 0 (0.0%)
+	Skipped TXs = 0 (0.0%)
 
-RX   19861517 bytes :    3.8 MB/s
-TX    2894832 bytes :    0.6 MB/s
-CPU Usage Stats (avg/min/max): 2.21%,0.38%,4.05%
+	RX   19861517 bytes :    3.8 MB/s
+	TX    2894832 bytes :    0.6 MB/s
+	CPU Usage Stats (avg/min/max): 2.21%,0.38%,4.05%
 
 mcperf reports the latency (average, minimum, and various
 percentiles) for get and set commands, as well as achieved QPS and
