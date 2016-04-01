@@ -15,6 +15,10 @@
 #define _POW 1.08
 //at bin 200 the latency is >4s
 #define LOGSAMPLER_BINS 200
+#ifdef GNUPLOT
+#include "gnuplot_i.h"
+static int nm=0;
+#endif
 
 class LogHistogramSampler {
 public:
@@ -114,6 +118,55 @@ public:
 
     for (hi=h.samples.begin();  hi!=h.samples.end(); hi++) samples.push_back(*hi);
   }
+  void plot(const char *tag, double QPS) {
+	if (sum<100) return;
+#ifdef GNUPLOT
+	gnuplot_ctrl    *   h1;
+	char fn[42];
+	char plot_name[80];
+	int size,i,ifirst,ilast;
+	//find start of latency bins
+	for (i=0; i<bins.size(); i++) {
+		if (bins[i] > 0)
+			break;
+	}
+	ifirst=i;
+	for (; i<bins.size(); i++) {
+		if ((bins[i] == 0 ) && (bins[i+1] == 0))
+			break;
+	}
+	ilast=i+1;
+	V("Plotting bins %d to %d\n",ifirst,ilast);
+	//find end of latency bins
+	size=ilast-ifirst;
+
+	double *x=(double *)malloc(size * sizeof(double));
+	double *y=(double *)malloc(size * sizeof(double));
+	//data for the plot
+	for (i=ifirst; i<ilast; i++) {
+		int id=i-ifirst;
+		x[id]=pow(_POW, (double) i) / 1000.0;
+		y[id]=bins[i];
+	}
+	//plot the bins
+	h1 = gnuplot_init() ;
+	const char *hstyle="impulses";
+    	gnuplot_setstyle(h1, (char *)hstyle) ;
+	gnuplot_cmd(h1, "set terminal png");
+	gnuplot_cmd(h1, "set xtics rotate");
+	sprintf(fn,"set output \"histogram_%s_%02d.png\"",tag,nm);
+    	gnuplot_cmd(h1, fn);
+	sprintf(plot_name,"Latency Histogram (Total=%ldK QPS=%fK)", total() / (1000), QPS/1000.0);
+	gnuplot_plot_xy(h1, x, y, size, plot_name) ;
+        sprintf(fn,"histogram_%s_%02d.csv",tag,nm);
+	gnuplot_write_xy_csv(fn,x,y,size,plot_name);
+	nm++;
+	gnuplot_close(h1);
+	free(x);
+	free(y);
+#endif
+  }
+
 };
 
 #endif // LOGHISTOGRAMSAMPLER_H

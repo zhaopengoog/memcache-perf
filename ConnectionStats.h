@@ -220,7 +220,7 @@ class ConnectionStats {
   }
 #else
   void print_stats(const char *tag, LogHistogramSampler &sampler,
-                   bool newline = true) {
+                   bool newline = true, bool plotit=false) {
 	int i;
     if (sampler.total() == 0) {
       printf("%-7s %7.1f %7.1f %7.1f",
@@ -240,7 +240,11 @@ class ConnectionStats {
 			printf(" %7.1f",sampler.get_nth(details[i]));
 		}
 
-    if (newline) printf("\n");
+    if (newline) 
+	printf("\n");
+
+    if (plotit)
+	sampler.plot(tag,get_qps());
   }
 #endif
 };
