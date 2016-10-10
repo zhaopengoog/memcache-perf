@@ -420,21 +420,7 @@ D("Agent %d prep recv= %s", aid, status?"true":"false");
 	if (response.compare("FAIL-RECV") == 0) {
 		itid=-1;
 	}
-/*
-    vector<string>::const_iterator it;
-    for (it = servers.begin() ; 
-	 it != servers.end() ; 
-	 it++) 
-    {
-      s_send(*s, *it);
-      string rep = s_recv(*s);
-	  if (rep.compare("FAIL-RECV") == 0) {
-		itid=-1;
-		break;
-	  }
-	  itid++;
-    }
-*/
+
 	// in case communication with agent broke down, remove from active list
 	if (itid<0) {
 		W("Agent failure detected, skip agent %d!",aid);
