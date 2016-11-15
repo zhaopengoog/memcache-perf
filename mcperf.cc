@@ -589,7 +589,7 @@ int sync_agent(zmq::socket_t* socket) {
 }
 #endif
 
-string name_to_ipaddr(string host) {
+string name_to_ipaddr(string host, int addport=1) {
   char *s_copy = new char[host.length() + 1];
   strcpy(s_copy, host.c_str());
 
@@ -643,8 +643,10 @@ string name_to_ipaddr(string host) {
   D("Resolved %s to %s", h_ptr, (string(ipaddr) + ":" + string(port)).c_str());
 
   delete[] s_copy;
-
-  return string(ipaddr) + ":" + string(port);
+  if (addport)
+  	return string(ipaddr) + ":" + string(port);
+  else
+	return string(ipaddr);
 }
 
 int main(int argc, char **argv) {
@@ -734,8 +736,30 @@ int main(int argc, char **argv) {
   pthread_create(&(cpustat.tid), 0, cpu_stat_thread, &cpustat);
 
   vector<string> servers;
-  for (unsigned int s = 0; s < args.server_given; s++)
-    servers.push_back(name_to_ipaddr(string(args.server_arg[s])));
+  for (unsigned int s = 0; s < args.server_given; s++) {
+	  string sname=args.server_arg[s];
+	  
+	  if (sname.find("-") !=  string::npos) { //parse range of ports on machine in case more then one instance is running
+		  char *saveptr = NULL;  // For reentrant strtok().
+		  char *cname=strdup(sname.c_str());
+
+		  char *h_ptr = strtok_r(cname, ":", &saveptr);
+		  char *start_port = strtok_r(NULL, "-", &saveptr);
+		  char *end_port = strtok_r(NULL, "-", &saveptr);
+		  
+		  string ip_addr=name_to_ipaddr(h_ptr,0);
+		  int sp=atoi(start_port);
+		  int ep=atoi(end_port);
+		  while (sp <= ep) {
+			  char buf[48];
+			  string s_instance=ip_addr + ":" + string( std::to_string(sp));
+			  servers.push_back(s_instance);
+			  sp++;
+		  }
+	  } else {
+		servers.push_back(name_to_ipaddr(string(args.server_arg[s])));
+	  }
+  }
 
   ConnectionStats stats;
 
@@ -861,9 +885,9 @@ int main(int argc, char **argv) {
     stats.print_stats("update", stats.set_sampler);
     stats.print_stats("op_q",   stats.op_sampler);
 
-    int total = stats.gets + stats.sets;
+    uint64_t total = stats.gets + stats.sets;
 
-    printf("\nTotal QPS = %.1f (%d / %.1fs)\n",
+    printf("\nTotal QPS = %.1f (%" PRIu64 " / %.1fs)\n",
            total / (stats.stop - stats.start),
            total, stats.stop - stats.start);
 
@@ -1024,7 +1048,7 @@ D("Waiting for thread %d.",t);
 
 #ifdef HAVE_LIBZMQ
   if (args.agent_given > 0) {
-    int total = stats.gets + stats.sets;
+    uint64_t total = stats.gets + stats.sets;
 
     V("Local QPS = %.1f (%d / %.1fs)",
       total / (stats.stop - stats.start),
