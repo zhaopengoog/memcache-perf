@@ -740,8 +740,9 @@ int main(int argc, char **argv) {
   vector<string> servers;
   for (unsigned int s = 0; s < args.server_given; s++) {
 	  string sname=args.server_arg[s];
-	  
-	  if (sname.find("-") !=  string::npos) { //parse range of ports on machine in case more then one instance is running
+	  size_t port_pos=sname.find(":");
+	  if ((port_pos != string::npos) && 
+		  (sname.find("-", port_pos) !=  string::npos)) { //parse range of ports on machine in case more then one instance is running
 		  char *saveptr = NULL;  // For reentrant strtok().
 		  char *cname=strdup(sname.c_str());
 
