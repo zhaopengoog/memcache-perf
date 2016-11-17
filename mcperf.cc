@@ -87,12 +87,12 @@ void* thread_main(void *arg);
 #ifdef HAVE_LIBZMQ
 static unsigned int max_poll_time=0;
 static unsigned int poll_interval_s=1;
-static long poll_interval_ns=100000;
-void setup_socket_timers(unsigned int max,  unsigned int ptime) {
-	if (max>0)
-		max_poll_time=max;
-	if (ptime>0)
-		poll_interval_s=ptime;
+//static long poll_interval_ns=100000;
+void setup_socket_timers() {
+	if (args.poll_freq_given)
+		poll_interval_s=args.poll_freq_arg;
+	if (args.poll_max_given)
+		max_poll_time=args.poll_max_arg;
 }
 #if defined(ZMQ_NOBLOCK)
 int noblock_flag=ZMQ_NOBLOCK;
@@ -694,13 +694,15 @@ int main(int argc, char **argv) {
     return 0;
   } else if (args.agent_given) {
 	int status;
+	setup_socket_timers();
     for (unsigned int i = 0; i < args.agent_given; i++) {
       zmq::socket_t *s = new zmq::socket_t(context, ZMQ_REQ);
 	  if (s==NULL) {
 		DIE("Could not open socket! %s",zmq_strerror(zmq_errno()));
 	  }
-      string host = string("tcp://") + string(args.agent_arg[i]) +
+      string host = string("tcp://") + name_to_ipaddr(args.agent_arg[i],0) +
         string(":") + string(args.agent_port_arg);
+		D("Add %s as agent\n",host.c_str());
 		// setup socket to handle as many connections as we will need
     int nconns = args.measure_connections_given ? args.measure_connections_arg :
       options.connections;
@@ -1047,15 +1049,16 @@ D("Waiting for thread %d.",t);
   }
 
 #ifdef HAVE_LIBZMQ
-  if (args.agent_given > 0) {
-    uint64_t total = stats.gets + stats.sets;
+	if (args.agent_given || args.agentmode_given) {
+    	uint64_t total = stats.gets + stats.sets;
 
-    V("Local QPS = %.1f (%d / %.1fs)",
-      total / (stats.stop - stats.start),
-      total, stats.stop - stats.start);    
-
-    finish_agent(stats);
-  }
+	    V("Local QPS = %.1f (%d / %.1fs)",
+    	total / (stats.stop - stats.start),
+      	total, stats.stop - stats.start);    
+	}
+	if (args.agent_given > 0) {
+		finish_agent(stats);
+	}
 #endif
 D("End of go()");
 }
@@ -1134,9 +1137,13 @@ void do_mcperf(const vector<string>& servers, options_t& options,
 	D("Connections req %s %d [%d/%d]",s->c_str(),conns,args.measure_connections_arg,options.connections);
 
     for (int c = 0; c < conns; c++) {
+
       Connection* conn = new Connection(base, evdns, hostname, port, options,
                                         args.agentmode_given ? true :
-                                        true);
+                                        true,
+										args.keycache_capacity_given ? args.keycache_capacity_arg : 0,
+										args.keycache_reuse_given ? args.keycache_reuse_arg : 0,
+										args.keycache_regen_given ? args.keycache_regen_arg : 0);
       connections.push_back(conn);
       if (c == 0) server_lead.push_back(conn);
     }

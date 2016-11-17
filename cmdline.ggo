@@ -1,5 +1,5 @@
 package "mcperf"
-version "0.1"
+version "0.2"
 usage "mcperf -s server[:port] [options]"
 description "\"High-performance\" memcached benchmarking tool"
 
@@ -73,10 +73,13 @@ overrides --connections." int
 option "measure_qps" Q "Explicitly set master client QPS, \
 spread across threads and connections." int
 option "measure_depth" D "Set master client connection depth." int
-option "poll_freq" m "Set frequency for agent protocol recv polling." int
-option "poll_max" m "Set timeout for agent protocol recv polling. An agent not responding within time limit will be dropped." int
-option "getq_size" m "Size of queue for multiget requests." int
-option "getq_freq" m "Frequency of multiget requests." int
+option "poll_freq" m "Set frequency in seconds for agent protocol recv polling." int default="1"
+option "poll_max" M "Set timeout for agent protocol recv polling. An agent not responding within time limit will be dropped." int default="120"
+option "getq_size" G "Size of queue for multiget requests." int default="100"
+option "getq_freq" g "Frequency of multiget requests, 0 for no multi-get, 100 for only multi-get." float default="0.0"
+option "keycache_capacity" - "Cached key capacity. (default 10000)" int default="10000"
+option "keycache_reuse" - "Number of times to reuse key cache before generating new req sequence. (Default 100)" int default="100"
+option "keycache_regen" - "When regenerating control number of requests to regenerate. (Default 1%)" int default="1"
 
 text "
 The --measure_* options aid in taking latency measurements of the

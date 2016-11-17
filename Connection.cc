@@ -25,13 +25,20 @@ int ConnectionStats::ndetails=sizeof(ConnectionStats::details)/sizeof(int);
 
 Connection::Connection(struct event_base* _base, struct evdns_base* _evdns,
                        string _hostname, string _port, options_t _options,
-                       bool sampling) :
+                       bool sampling, 
+					   int key_capacity, int key_reuse, int key_regen) :
   hostname(_hostname), port(_port), start_time(0),
   stats(sampling), options(_options), base(_base), evdns(_evdns), read_state(INIT_READ)
 {
   valuesize = createGenerator(options.valuesize);
   keysize = createGenerator(options.keysize);
-  keygen = new KeyGenerator(keysize, options.records);
+  //keygen = new KeyGenerator(keysize, options.records);
+  if (key_capacity>0) {
+	keygen=new CachingKeyGenerator(keysize, options.records, key_capacity, key_reuse, key_regen);
+  } else {
+	keygen=new CachingKeyGenerator(keysize, options.records);
+  }
+
 
   if (options.lambda <= 0) {
     iagen = createGenerator("0");
@@ -97,13 +104,11 @@ void Connection::issue_sasl() {
   bufferevent_write(bev, password.c_str(), password.length());
 }
 
-void Connection::issue_get(const char* key, double now) {
+void Connection::issue_get_req(const char* key, const char *req, double now) {
   Operation op;
   int l;
-  uint16_t keylen = strlen(key);
   op.n_req=1;
   op.n_recv=0;
-
 #if HAVE_CLOCK_GETTIME
   op.start_time = get_time_accurate();
 #else
@@ -120,29 +125,37 @@ void Connection::issue_get(const char* key, double now) {
     op.start_time = now;
   }
 #endif
-
   op.type = Operation::GET;
   op.key = string(key);
-
   op_queue.push(op);
 
   if (read_state == IDLE)
     read_state = WAITING_FOR_GET;
 
   if (options.binary) {
+    uint16_t keylen = strlen(key);
     // each line is 4-bytes
     binary_header_t h = {0x80, CMD_GET, htons(keylen),
-                         0x00, 0x00, {htons(0)}, //TODO(syang0) get actual vbucket?
+                         0x00, 0x00, {htons(0)}, 
                          htonl(keylen) };
 
     bufferevent_write(bev, &h, 24); // size does not include extras
     bufferevent_write(bev, key, keylen);
     l = 24 + keylen;
   } else {
-    l = evbuffer_add_printf(bufferevent_get_output(bev), "get %s\r\n", key);
+    if (req == NULL) {
+		l = evbuffer_add_printf(bufferevent_get_output(bev), "get %s\r\n", key);
+    } else {
+    	l = evbuffer_add(bufferevent_get_output(bev), req, strlen(req));
+    }
   }
 
   if (read_state != LOADING) stats.tx_bytes += l;
+
+}
+
+void Connection::issue_get(const char* key, double now) {
+	Connection::issue_get_req(key,NULL,now);
 }
 
 void Connection::issue_multi_get(int nkeys, double now) {
@@ -267,24 +280,22 @@ void Connection::issue_set(const char* key, const char* value, int length,
 }
 
 void Connection::issue_something(double now) {
-  char key[256];
-  // FIXME: generate key distribution here!
-  string keystr = keygen->generate(lrand48() % options.records);
-  strcpy(key, keystr.c_str());
-  //  int key_index = lrand48() % options.records;
-  //  generate_key(key_index, options.keysize, key);
-
-  if (drand48() < options.update) {
-    int index = lrand48() % (1024 * 1024);
-    //    issue_set(key, &random_char[index], options.valuesize, now);
-    issue_set(key, &random_char[index], valuesize->generate(), now);
-  } else {
-	if (drand48() < options.getq_freq) {
-		issue_multi_get(options.getq_size,now);
-	} else {
-    issue_get(key, now);
-	}
-  }
+	const char *key = keygen->generate_next();
+	if ((options.update > 0) || (options.getq_freq > 0)) {
+  		if (drand48() < options.update) {
+	    	int index = lrand48() % (1024 * 1024);
+			issue_set(key, &random_char[index], valuesize->generate(), now);
+			return;
+		} else {
+			if (drand48() < options.getq_freq) {
+				issue_multi_get(options.getq_size,now);
+				return;
+			}
+		}
+		//Otherwise fall through to simple get
+	} 
+	const char *req = keygen->current_get_req();
+	issue_get_req(key, req, now);
 }
 
 void Connection::pop_op() {

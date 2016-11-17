@@ -27,7 +27,8 @@ class Connection {
 public:
   Connection(struct event_base* _base, struct evdns_base* _evdns,
              string _hostname, string _port, options_t options,
-             bool sampling = true);
+             bool sampling = true,
+			 int key_capacity=0, int key_reuse=100, int key_regen=1);
   ~Connection();
 
   string hostname;
@@ -61,6 +62,7 @@ public:
   ConnectionStats stats;
 
   void issue_get(const char* key, double now = 0.0);
+  void issue_get_req(const char* key, const char *req, double now = 0.0);
   void issue_multi_get(int nkeys=50, double now=0.0);
   void issue_set(const char* key, const char* value, int length,
                  double now = 0.0);
@@ -104,6 +106,7 @@ private:
 
   Generator *valuesize;
   Generator *keysize;
-  KeyGenerator *keygen;
+  //KeyGenerator *keygen;
+  CachingKeyGenerator *keygen;
   Generator *iagen;
 };
