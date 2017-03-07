@@ -43,11 +43,11 @@ struct gengetopt_args_info
   unsigned int verbose_max; /**< @brief Verbosity. Repeat for more verbose.'s maximum occurreces */
   const char *verbose_help; /**< @brief Verbosity. Repeat for more verbose. help description.  */
   const char *quiet_help; /**< @brief Disable log messages. help description.  */
-  char ** server_arg;	/**< @brief Memcached server hostname[:port].  Repeat to specify multiple servers..  */
-  char ** server_orig;	/**< @brief Memcached server hostname[:port].  Repeat to specify multiple servers. original value given at command line.  */
-  unsigned int server_min; /**< @brief Memcached server hostname[:port].  Repeat to specify multiple servers.'s minimum occurreces */
-  unsigned int server_max; /**< @brief Memcached server hostname[:port].  Repeat to specify multiple servers.'s maximum occurreces */
-  const char *server_help; /**< @brief Memcached server hostname[:port].  Repeat to specify multiple servers. help description.  */
+  char ** server_arg;	/**< @brief Memcached server hostname[:port[-end_port]].  Repeat to specify multiple servers. .  */
+  char ** server_orig;	/**< @brief Memcached server hostname[:port[-end_port]].  Repeat to specify multiple servers.  original value given at command line.  */
+  unsigned int server_min; /**< @brief Memcached server hostname[:port[-end_port]].  Repeat to specify multiple servers. 's minimum occurreces */
+  unsigned int server_max; /**< @brief Memcached server hostname[:port[-end_port]].  Repeat to specify multiple servers. 's maximum occurreces */
+  const char *server_help; /**< @brief Memcached server hostname[:port[-end_port]].  Repeat to specify multiple servers.  help description.  */
   const char *binary_help; /**< @brief Use binary memcached protocol instead of ASCII. help description.  */
   int qps_arg;	/**< @brief Target aggregate QPS. 0 = peak QPS. (default='0').  */
   char * qps_orig;	/**< @brief Target aggregate QPS. 0 = peak QPS. original value given at command line.  */
@@ -108,6 +108,22 @@ struct gengetopt_args_info
   char * scan_arg;	/**< @brief Scan latency across QPS rates from min to max..  */
   char * scan_orig;	/**< @brief Scan latency across QPS rates from min to max. original value given at command line.  */
   const char *scan_help; /**< @brief Scan latency across QPS rates from min to max. help description.  */
+  const char *trace_help; /**< @brief To enable server tracing based on client activity, will issue special start_trace/stop_trace commands. Requires memcached to support these commands. help description.  */
+  int getq_size_arg;	/**< @brief Size of queue for multiget requests. (default='100').  */
+  char * getq_size_orig;	/**< @brief Size of queue for multiget requests. original value given at command line.  */
+  const char *getq_size_help; /**< @brief Size of queue for multiget requests. help description.  */
+  float getq_freq_arg;	/**< @brief Frequency of multiget requests, 0 for no multi-get, 100 for only multi-get. (default='0.0').  */
+  char * getq_freq_orig;	/**< @brief Frequency of multiget requests, 0 for no multi-get, 100 for only multi-get. original value given at command line.  */
+  const char *getq_freq_help; /**< @brief Frequency of multiget requests, 0 for no multi-get, 100 for only multi-get. help description.  */
+  int keycache_capacity_arg;	/**< @brief Cached key capacity. (default 10000) (default='10000').  */
+  char * keycache_capacity_orig;	/**< @brief Cached key capacity. (default 10000) original value given at command line.  */
+  const char *keycache_capacity_help; /**< @brief Cached key capacity. (default 10000) help description.  */
+  int keycache_reuse_arg;	/**< @brief Number of times to reuse key cache before generating new req sequence. (Default 100) (default='100').  */
+  char * keycache_reuse_orig;	/**< @brief Number of times to reuse key cache before generating new req sequence. (Default 100) original value given at command line.  */
+  const char *keycache_reuse_help; /**< @brief Number of times to reuse key cache before generating new req sequence. (Default 100) help description.  */
+  int keycache_regen_arg;	/**< @brief When regenerating control number of requests to regenerate. (Default 1%) (default='1').  */
+  char * keycache_regen_orig;	/**< @brief When regenerating control number of requests to regenerate. (Default 1%) original value given at command line.  */
+  const char *keycache_regen_help; /**< @brief When regenerating control number of requests to regenerate. (Default 1%) help description.  */
   const char *agentmode_help; /**< @brief Run client in agent mode. help description.  */
   char ** agent_arg;	/**< @brief Enlist remote agent..  */
   char ** agent_orig;	/**< @brief Enlist remote agent. original value given at command line.  */
@@ -135,21 +151,6 @@ struct gengetopt_args_info
   int poll_max_arg;	/**< @brief Set timeout for agent protocol recv polling. An agent not responding within time limit will be dropped. (default='120').  */
   char * poll_max_orig;	/**< @brief Set timeout for agent protocol recv polling. An agent not responding within time limit will be dropped. original value given at command line.  */
   const char *poll_max_help; /**< @brief Set timeout for agent protocol recv polling. An agent not responding within time limit will be dropped. help description.  */
-  int getq_size_arg;	/**< @brief Size of queue for multiget requests. (default='100').  */
-  char * getq_size_orig;	/**< @brief Size of queue for multiget requests. original value given at command line.  */
-  const char *getq_size_help; /**< @brief Size of queue for multiget requests. help description.  */
-  float getq_freq_arg;	/**< @brief Frequency of multiget requests, 0 for no multi-get, 100 for only multi-get. (default='0.0').  */
-  char * getq_freq_orig;	/**< @brief Frequency of multiget requests, 0 for no multi-get, 100 for only multi-get. original value given at command line.  */
-  const char *getq_freq_help; /**< @brief Frequency of multiget requests, 0 for no multi-get, 100 for only multi-get. help description.  */
-  int keycache_capacity_arg;	/**< @brief Cached key capacity. (default 10000) (default='10000').  */
-  char * keycache_capacity_orig;	/**< @brief Cached key capacity. (default 10000) original value given at command line.  */
-  const char *keycache_capacity_help; /**< @brief Cached key capacity. (default 10000) help description.  */
-  int keycache_reuse_arg;	/**< @brief Number of times to reuse key cache before generating new req sequence. (Default 100) (default='100').  */
-  char * keycache_reuse_orig;	/**< @brief Number of times to reuse key cache before generating new req sequence. (Default 100) original value given at command line.  */
-  const char *keycache_reuse_help; /**< @brief Number of times to reuse key cache before generating new req sequence. (Default 100) help description.  */
-  int keycache_regen_arg;	/**< @brief When regenerating control number of requests to regenerate. (Default 1%) (default='1').  */
-  char * keycache_regen_orig;	/**< @brief When regenerating control number of requests to regenerate. (Default 1%) original value given at command line.  */
-  const char *keycache_regen_help; /**< @brief When regenerating control number of requests to regenerate. (Default 1%) help description.  */
   
   unsigned int help_given ;	/**< @brief Whether help was given.  */
   unsigned int version_given ;	/**< @brief Whether version was given.  */
@@ -182,6 +183,12 @@ struct gengetopt_args_info
   unsigned int save_given ;	/**< @brief Whether save was given.  */
   unsigned int search_given ;	/**< @brief Whether search was given.  */
   unsigned int scan_given ;	/**< @brief Whether scan was given.  */
+  unsigned int trace_given ;	/**< @brief Whether trace was given.  */
+  unsigned int getq_size_given ;	/**< @brief Whether getq_size was given.  */
+  unsigned int getq_freq_given ;	/**< @brief Whether getq_freq was given.  */
+  unsigned int keycache_capacity_given ;	/**< @brief Whether keycache_capacity was given.  */
+  unsigned int keycache_reuse_given ;	/**< @brief Whether keycache_reuse was given.  */
+  unsigned int keycache_regen_given ;	/**< @brief Whether keycache_regen was given.  */
   unsigned int agentmode_given ;	/**< @brief Whether agentmode was given.  */
   unsigned int agent_given ;	/**< @brief Whether agent was given.  */
   unsigned int agent_port_given ;	/**< @brief Whether agent_port was given.  */
@@ -191,11 +198,6 @@ struct gengetopt_args_info
   unsigned int measure_depth_given ;	/**< @brief Whether measure_depth was given.  */
   unsigned int poll_freq_given ;	/**< @brief Whether poll_freq was given.  */
   unsigned int poll_max_given ;	/**< @brief Whether poll_max was given.  */
-  unsigned int getq_size_given ;	/**< @brief Whether getq_size was given.  */
-  unsigned int getq_freq_given ;	/**< @brief Whether getq_freq was given.  */
-  unsigned int keycache_capacity_given ;	/**< @brief Whether keycache_capacity was given.  */
-  unsigned int keycache_reuse_given ;	/**< @brief Whether keycache_reuse was given.  */
-  unsigned int keycache_regen_given ;	/**< @brief Whether keycache_regen was given.  */
 
 } ;
 

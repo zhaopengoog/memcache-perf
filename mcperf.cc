@@ -1285,24 +1285,24 @@ void do_mcperf(const vector<string>& servers, options_t& options,
     if (restart) {
 
     // Wait for all Connections to become IDLE.
-    while (1) {
-      // FIXME: If there were to use EVLOOP_ONCE and all connections
-      // become ready before event_base_loop is called, this will
-      // deadlock.  We should check for IDLE before calling
-      // event_base_loop.
-      event_base_loop(base, EVLOOP_ONCE); // EVLOOP_NONBLOCK);
+		while (1) {
+		  // FIXME: If there were to use EVLOOP_ONCE and all connections
+		  // become ready before event_base_loop is called, this will
+		  // deadlock.  We should check for IDLE before calling
+		  // event_base_loop.
+			event_base_loop(base, EVLOOP_ONCE); // EVLOOP_NONBLOCK);
 
-      bool restart = false;
-         vector<Connection*>::iterator iconn;
-    for (iconn= connections.begin(); iconn!=connections.end(); iconn++ ) {
-        Connection *conn=*iconn;
-        if (conn->read_state != Connection::IDLE)
-          restart = true;
-	}
+			bool restart = false;
+			vector<Connection*>::iterator iconn;
+			for (iconn= connections.begin(); iconn!=connections.end(); iconn++ ) {
+				Connection *conn=*iconn;
+				if (conn->read_state != Connection::IDLE)
+				  restart = true;
+			}
 
-      if (restart) continue;
-      else break;
-    }
+			if (restart) continue;
+			else break;
+		}
     }
 
     //    options.time = old_time;
@@ -1345,7 +1345,15 @@ void do_mcperf(const vector<string>& servers, options_t& options,
   if (master && !args.scan_given && !args.search_given)
     V("started at %f", get_time());
 
-  start = get_time();
+	start = get_time();
+	if (args.trace_given) { 
+	/* 	To support tracing/simulation, in trace mode, 
+		send special start_trace/stop_trace commands to the server,
+		and at end of test, kill the server.
+	*/
+        Connection *conn=*connections.begin();
+		conn->issue_command("start_trace");
+	}
          vector<Connection*>::iterator iconn;
     for (iconn= connections.begin(); iconn!=connections.end(); iconn++ ) {
         Connection *conn=*iconn;
@@ -1380,6 +1388,16 @@ void do_mcperf(const vector<string>& servers, options_t& options,
   }
 
   if (master && !args.scan_given && !args.search_given)
+	if (args.trace_given) { 
+	/* 	To support tracing/simulation, in trace mode, 
+		send special start_trace/stop_trace commands to the server,
+		and at end of test, kill the server.
+	*/
+        Connection *conn=*connections.begin();
+		conn->issue_command("stop_trace");
+		conn->issue_command("shutdown");
+		event_base_loop(base, loop_flag);
+	}
     V("stopped at %f  options.time = %d", get_time(), options.time);
 
   // Tear-down and accumulate stats.

@@ -39,7 +39,7 @@ const char *gengetopt_args_info_help[] = {
   "  -v, --verbose                 Verbosity. Repeat for more verbose.",
   "      --quiet                   Disable log messages.",
   "\nBasic options:",
-  "  -s, --server=STRING           Memcached server hostname[:port].  Repeat to\n                                  specify multiple servers.",
+  "  -s, --server=STRING           Memcached server hostname[:port[-end_port]].\n                                  Repeat to specify multiple servers. ",
   "      --binary                  Use binary memcached protocol instead of ASCII.",
   "  -q, --qps=INT                 Target aggregate QPS. 0 = peak QPS.\n                                  (default=`0')",
   "  -t, --time=INT                Maximum time to run (seconds).  (default=`5')",
@@ -67,6 +67,12 @@ const char *gengetopt_args_info_help[] = {
   "      --save=STRING             Record latency samples to given file.",
   "      --search=N:X              Search for the QPS where N-order statistic <\n                                  Xus.  (i.e. --search 95:1000 means find the\n                                  QPS where 95% of requests are faster than\n                                  1000us).",
   "      --scan=min:max:step       Scan latency across QPS rates from min to max.",
+  "  -e, --trace                   To enable server tracing based on client\n                                  activity, will issue special\n                                  start_trace/stop_trace commands. Requires\n                                  memcached to support these commands.",
+  "  -G, --getq_size=INT           Size of queue for multiget requests.\n                                  (default=`100')",
+  "  -g, --getq_freq=FLOAT         Frequency of multiget requests, 0 for no\n                                  multi-get, 100 for only multi-get.\n                                  (default=`0.0')",
+  "      --keycache_capacity=INT   Cached key capacity. (default 10000)\n                                  (default=`10000')",
+  "      --keycache_reuse=INT      Number of times to reuse key cache before\n                                  generating new req sequence. (Default 100)\n                                  (default=`100')",
+  "      --keycache_regen=INT      When regenerating control number of requests to\n                                  regenerate. (Default 1%)  (default=`1')",
   "\nAgent-mode options:",
   "  -A, --agentmode               Run client in agent mode.",
   "  -a, --agent=host              Enlist remote agent.",
@@ -77,11 +83,6 @@ const char *gengetopt_args_info_help[] = {
   "  -D, --measure_depth=INT       Set master client connection depth.",
   "  -m, --poll_freq=INT           Set frequency in seconds for agent protocol\n                                  recv polling.  (default=`1')",
   "  -M, --poll_max=INT            Set timeout for agent protocol recv polling. An\n                                  agent not responding within time limit will\n                                  be dropped.  (default=`120')",
-  "  -G, --getq_size=INT           Size of queue for multiget requests.\n                                  (default=`100')",
-  "  -g, --getq_freq=FLOAT         Frequency of multiget requests, 0 for no\n                                  multi-get, 100 for only multi-get.\n                                  (default=`0.0')",
-  "      --keycache_capacity=INT   Cached key capacity. (default 10000)\n                                  (default=`10000')",
-  "      --keycache_reuse=INT      Number of times to reuse key cache before\n                                  generating new req sequence. (Default 100)\n                                  (default=`100')",
-  "      --keycache_regen=INT      When regenerating control number of requests to\n                                  regenerate. (Default 1%)  (default=`1')",
   "\nThe --measure_* options aid in taking latency measurements of the\nmemcached server without incurring significant client-side queuing\ndelay.  --measure_connections allows the master to override the\n--connections option.  --measure_depth allows the master to operate as\nan \"open-loop\" client while other agents continue as a regular\nclosed-loop clients.  --measure_qps lets you modulate the QPS the\nmaster queries at independent of other clients.  This theoretically\nnormalizes the baseline queuing delay you expect to see across a wide\nrange of --qps values.\n\nSome options take a 'distribution' as an argument.\nDistributions are specified by <distribution>[:<param1>[,...]].\nParameters are not required.  The following distributions are supported:\n\n   [fixed:]<value>              Always generates <value>.\n   uniform:<max>                Uniform distribution between 0 and <max>.\n   normal:<mean>,<sd>           Normal distribution.\n   exponential:<lambda>         Exponential distribution.\n   pareto:<loc>,<scale>,<shape> Generalized Pareto distribution.\n   gev:<loc>,<scale>,<shape>    Generalized Extreme Value distribution.\n\n   To recreate the Facebook \"ETC\" request stream from [1], the\n   following hard-coded distributions are also provided:\n\n   fb_value   = a hard-coded discrete and GPareto PDF of value sizes\n   fb_key     = \"gev:30.7984,8.20449,0.078688\", key-size distribution\n   fb_ia      = \"pareto:0.0,16.0292,0.154971\", inter-arrival time dist.\n\n[1] Berk Atikoglu et al., Workload Analysis of a Large-Scale Key-Value Store,\n    SIGMETRICS 2012\n",
     0
 };
@@ -165,6 +166,12 @@ void clear_given (struct gengetopt_args_info *args_info)
   args_info->save_given = 0 ;
   args_info->search_given = 0 ;
   args_info->scan_given = 0 ;
+  args_info->trace_given = 0 ;
+  args_info->getq_size_given = 0 ;
+  args_info->getq_freq_given = 0 ;
+  args_info->keycache_capacity_given = 0 ;
+  args_info->keycache_reuse_given = 0 ;
+  args_info->keycache_regen_given = 0 ;
   args_info->agentmode_given = 0 ;
   args_info->agent_given = 0 ;
   args_info->agent_port_given = 0 ;
@@ -174,11 +181,6 @@ void clear_given (struct gengetopt_args_info *args_info)
   args_info->measure_depth_given = 0 ;
   args_info->poll_freq_given = 0 ;
   args_info->poll_max_given = 0 ;
-  args_info->getq_size_given = 0 ;
-  args_info->getq_freq_given = 0 ;
-  args_info->keycache_capacity_given = 0 ;
-  args_info->keycache_reuse_given = 0 ;
-  args_info->keycache_regen_given = 0 ;
 }
 
 static
@@ -219,6 +221,16 @@ void clear_args (struct gengetopt_args_info *args_info)
   args_info->search_orig = NULL;
   args_info->scan_arg = NULL;
   args_info->scan_orig = NULL;
+  args_info->getq_size_arg = 100;
+  args_info->getq_size_orig = NULL;
+  args_info->getq_freq_arg = 0.0;
+  args_info->getq_freq_orig = NULL;
+  args_info->keycache_capacity_arg = 10000;
+  args_info->keycache_capacity_orig = NULL;
+  args_info->keycache_reuse_arg = 100;
+  args_info->keycache_reuse_orig = NULL;
+  args_info->keycache_regen_arg = 1;
+  args_info->keycache_regen_orig = NULL;
   args_info->agent_arg = NULL;
   args_info->agent_orig = NULL;
   args_info->agent_port_arg = gengetopt_strdup ("5556");
@@ -232,16 +244,6 @@ void clear_args (struct gengetopt_args_info *args_info)
   args_info->poll_freq_orig = NULL;
   args_info->poll_max_arg = 120;
   args_info->poll_max_orig = NULL;
-  args_info->getq_size_arg = 100;
-  args_info->getq_size_orig = NULL;
-  args_info->getq_freq_arg = 0.0;
-  args_info->getq_freq_orig = NULL;
-  args_info->keycache_capacity_arg = 10000;
-  args_info->keycache_capacity_orig = NULL;
-  args_info->keycache_reuse_arg = 100;
-  args_info->keycache_reuse_orig = NULL;
-  args_info->keycache_regen_arg = 1;
-  args_info->keycache_regen_orig = NULL;
   
 }
 
@@ -285,22 +287,23 @@ void init_args_info(struct gengetopt_args_info *args_info)
   args_info->save_help = gengetopt_args_info_help[30] ;
   args_info->search_help = gengetopt_args_info_help[31] ;
   args_info->scan_help = gengetopt_args_info_help[32] ;
-  args_info->agentmode_help = gengetopt_args_info_help[34] ;
-  args_info->agent_help = gengetopt_args_info_help[35] ;
+  args_info->trace_help = gengetopt_args_info_help[33] ;
+  args_info->getq_size_help = gengetopt_args_info_help[34] ;
+  args_info->getq_freq_help = gengetopt_args_info_help[35] ;
+  args_info->keycache_capacity_help = gengetopt_args_info_help[36] ;
+  args_info->keycache_reuse_help = gengetopt_args_info_help[37] ;
+  args_info->keycache_regen_help = gengetopt_args_info_help[38] ;
+  args_info->agentmode_help = gengetopt_args_info_help[40] ;
+  args_info->agent_help = gengetopt_args_info_help[41] ;
   args_info->agent_min = 0;
   args_info->agent_max = 0;
-  args_info->agent_port_help = gengetopt_args_info_help[36] ;
-  args_info->lambda_mul_help = gengetopt_args_info_help[37] ;
-  args_info->measure_connections_help = gengetopt_args_info_help[38] ;
-  args_info->measure_qps_help = gengetopt_args_info_help[39] ;
-  args_info->measure_depth_help = gengetopt_args_info_help[40] ;
-  args_info->poll_freq_help = gengetopt_args_info_help[41] ;
-  args_info->poll_max_help = gengetopt_args_info_help[42] ;
-  args_info->getq_size_help = gengetopt_args_info_help[43] ;
-  args_info->getq_freq_help = gengetopt_args_info_help[44] ;
-  args_info->keycache_capacity_help = gengetopt_args_info_help[45] ;
-  args_info->keycache_reuse_help = gengetopt_args_info_help[46] ;
-  args_info->keycache_regen_help = gengetopt_args_info_help[47] ;
+  args_info->agent_port_help = gengetopt_args_info_help[42] ;
+  args_info->lambda_mul_help = gengetopt_args_info_help[43] ;
+  args_info->measure_connections_help = gengetopt_args_info_help[44] ;
+  args_info->measure_qps_help = gengetopt_args_info_help[45] ;
+  args_info->measure_depth_help = gengetopt_args_info_help[46] ;
+  args_info->poll_freq_help = gengetopt_args_info_help[47] ;
+  args_info->poll_max_help = gengetopt_args_info_help[48] ;
   
 }
 
@@ -456,6 +459,11 @@ cmdline_parser_release (struct gengetopt_args_info *args_info)
   free_string_field (&(args_info->search_orig));
   free_string_field (&(args_info->scan_arg));
   free_string_field (&(args_info->scan_orig));
+  free_string_field (&(args_info->getq_size_orig));
+  free_string_field (&(args_info->getq_freq_orig));
+  free_string_field (&(args_info->keycache_capacity_orig));
+  free_string_field (&(args_info->keycache_reuse_orig));
+  free_string_field (&(args_info->keycache_regen_orig));
   free_multiple_string_field (args_info->agent_given, &(args_info->agent_arg), &(args_info->agent_orig));
   free_string_field (&(args_info->agent_port_arg));
   free_string_field (&(args_info->agent_port_orig));
@@ -465,11 +473,6 @@ cmdline_parser_release (struct gengetopt_args_info *args_info)
   free_string_field (&(args_info->measure_depth_orig));
   free_string_field (&(args_info->poll_freq_orig));
   free_string_field (&(args_info->poll_max_orig));
-  free_string_field (&(args_info->getq_size_orig));
-  free_string_field (&(args_info->getq_freq_orig));
-  free_string_field (&(args_info->keycache_capacity_orig));
-  free_string_field (&(args_info->keycache_reuse_orig));
-  free_string_field (&(args_info->keycache_regen_orig));
   
   
 
@@ -568,6 +571,18 @@ cmdline_parser_dump(FILE *outfile, struct gengetopt_args_info *args_info)
     write_into_file(outfile, "search", args_info->search_orig, 0);
   if (args_info->scan_given)
     write_into_file(outfile, "scan", args_info->scan_orig, 0);
+  if (args_info->trace_given)
+    write_into_file(outfile, "trace", 0, 0 );
+  if (args_info->getq_size_given)
+    write_into_file(outfile, "getq_size", args_info->getq_size_orig, 0);
+  if (args_info->getq_freq_given)
+    write_into_file(outfile, "getq_freq", args_info->getq_freq_orig, 0);
+  if (args_info->keycache_capacity_given)
+    write_into_file(outfile, "keycache_capacity", args_info->keycache_capacity_orig, 0);
+  if (args_info->keycache_reuse_given)
+    write_into_file(outfile, "keycache_reuse", args_info->keycache_reuse_orig, 0);
+  if (args_info->keycache_regen_given)
+    write_into_file(outfile, "keycache_regen", args_info->keycache_regen_orig, 0);
   if (args_info->agentmode_given)
     write_into_file(outfile, "agentmode", 0, 0 );
   write_multiple_into_file(outfile, args_info->agent_given, "agent", args_info->agent_orig, 0);
@@ -585,16 +600,6 @@ cmdline_parser_dump(FILE *outfile, struct gengetopt_args_info *args_info)
     write_into_file(outfile, "poll_freq", args_info->poll_freq_orig, 0);
   if (args_info->poll_max_given)
     write_into_file(outfile, "poll_max", args_info->poll_max_orig, 0);
-  if (args_info->getq_size_given)
-    write_into_file(outfile, "getq_size", args_info->getq_size_orig, 0);
-  if (args_info->getq_freq_given)
-    write_into_file(outfile, "getq_freq", args_info->getq_freq_orig, 0);
-  if (args_info->keycache_capacity_given)
-    write_into_file(outfile, "keycache_capacity", args_info->keycache_capacity_orig, 0);
-  if (args_info->keycache_reuse_given)
-    write_into_file(outfile, "keycache_reuse", args_info->keycache_reuse_orig, 0);
-  if (args_info->keycache_regen_given)
-    write_into_file(outfile, "keycache_regen", args_info->keycache_regen_orig, 0);
   
 
   i = EXIT_SUCCESS;
@@ -1189,6 +1194,12 @@ cmdline_parser_internal (
         { "save",	1, NULL, 0 },
         { "search",	1, NULL, 0 },
         { "scan",	1, NULL, 0 },
+        { "trace",	0, NULL, 'e' },
+        { "getq_size",	1, NULL, 'G' },
+        { "getq_freq",	1, NULL, 'g' },
+        { "keycache_capacity",	1, NULL, 0 },
+        { "keycache_reuse",	1, NULL, 0 },
+        { "keycache_regen",	1, NULL, 0 },
         { "agentmode",	0, NULL, 'A' },
         { "agent",	1, NULL, 'a' },
         { "agent_port",	1, NULL, 'p' },
@@ -1198,15 +1209,10 @@ cmdline_parser_internal (
         { "measure_depth",	1, NULL, 'D' },
         { "poll_freq",	1, NULL, 'm' },
         { "poll_max",	1, NULL, 'M' },
-        { "getq_size",	1, NULL, 'G' },
-        { "getq_freq",	1, NULL, 'g' },
-        { "keycache_capacity",	1, NULL, 0 },
-        { "keycache_reuse",	1, NULL, 0 },
-        { "keycache_regen",	1, NULL, 0 },
         { 0,  0, 0, 0 }
       };
 
-      c = getopt_long (argc, argv, "hvs:q:t:K:V:r:u:U:P:T:c:d:Ri:SBw:W:Aa:p:l:C:Q:D:m:M:G:g:", long_options, &option_index);
+      c = getopt_long (argc, argv, "hvs:q:t:K:V:r:u:U:P:T:c:d:Ri:SBw:W:eG:g:Aa:p:l:C:Q:D:m:M:", long_options, &option_index);
 
       if (c == -1) break;	/* Exit from `while (1)' loop.  */
 
@@ -1222,7 +1228,7 @@ cmdline_parser_internal (
           local_args_info.verbose_given++;
         
           break;
-        case 's':	/* Memcached server hostname[:port].  Repeat to specify multiple servers..  */
+        case 's':	/* Memcached server hostname[:port[-end_port]].  Repeat to specify multiple servers. .  */
         
           if (update_multiple_arg_temp(&server_list, 
               &(local_args_info.server_given), optarg, 0, 0, ARG_STRING,
@@ -1435,6 +1441,42 @@ cmdline_parser_internal (
             goto failure;
         
           break;
+        case 'e':	/* To enable server tracing based on client activity, will issue special start_trace/stop_trace commands. Requires memcached to support these commands..  */
+        
+        
+          if (update_arg( 0 , 
+               0 , &(args_info->trace_given),
+              &(local_args_info.trace_given), optarg, 0, 0, ARG_NO,
+              check_ambiguity, override, 0, 0,
+              "trace", 'e',
+              additional_error))
+            goto failure;
+        
+          break;
+        case 'G':	/* Size of queue for multiget requests..  */
+        
+        
+          if (update_arg( (void *)&(args_info->getq_size_arg), 
+               &(args_info->getq_size_orig), &(args_info->getq_size_given),
+              &(local_args_info.getq_size_given), optarg, 0, "100", ARG_INT,
+              check_ambiguity, override, 0, 0,
+              "getq_size", 'G',
+              additional_error))
+            goto failure;
+        
+          break;
+        case 'g':	/* Frequency of multiget requests, 0 for no multi-get, 100 for only multi-get..  */
+        
+        
+          if (update_arg( (void *)&(args_info->getq_freq_arg), 
+               &(args_info->getq_freq_orig), &(args_info->getq_freq_given),
+              &(local_args_info.getq_freq_given), optarg, 0, "0.0", ARG_FLOAT,
+              check_ambiguity, override, 0, 0,
+              "getq_freq", 'g',
+              additional_error))
+            goto failure;
+        
+          break;
         case 'A':	/* Run client in agent mode..  */
         
         
@@ -1536,30 +1578,6 @@ cmdline_parser_internal (
               &(local_args_info.poll_max_given), optarg, 0, "120", ARG_INT,
               check_ambiguity, override, 0, 0,
               "poll_max", 'M',
-              additional_error))
-            goto failure;
-        
-          break;
-        case 'G':	/* Size of queue for multiget requests..  */
-        
-        
-          if (update_arg( (void *)&(args_info->getq_size_arg), 
-               &(args_info->getq_size_orig), &(args_info->getq_size_given),
-              &(local_args_info.getq_size_given), optarg, 0, "100", ARG_INT,
-              check_ambiguity, override, 0, 0,
-              "getq_size", 'G',
-              additional_error))
-            goto failure;
-        
-          break;
-        case 'g':	/* Frequency of multiget requests, 0 for no multi-get, 100 for only multi-get..  */
-        
-        
-          if (update_arg( (void *)&(args_info->getq_freq_arg), 
-               &(args_info->getq_freq_orig), &(args_info->getq_freq_given),
-              &(local_args_info.getq_freq_given), optarg, 0, "0.0", ARG_FLOAT,
-              check_ambiguity, override, 0, 0,
-              "getq_freq", 'g',
               additional_error))
             goto failure;
         

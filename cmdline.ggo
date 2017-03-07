@@ -10,8 +10,8 @@ option "quiet" - "Disable log messages."
 
 text "\nBasic options:"
 
-option "server" s "Memcached server hostname[:port].  \
-Repeat to specify multiple servers." string multiple
+option "server" s "Memcached server hostname[:port[-end_port]].  \
+Repeat to specify multiple servers. " string multiple
 option "binary" - "Use binary memcached protocol instead of ASCII."
 option "qps" q "Target aggregate QPS. 0 = peak QPS." int default="0"
 option "time" t "Maximum time to run (seconds)." int default="5"
@@ -62,6 +62,15 @@ faster than 1000us)." string typestr="N:X"
 option "scan" - "Scan latency across QPS rates from min to max."
        string typestr="min:max:step"
 
+option "trace" e "To enable server tracing based on client activity, \
+will issue special start_trace/stop_trace commands. \
+Requires memcached to support these commands."
+option "getq_size" G "Size of queue for multiget requests." int default="100"
+option "getq_freq" g "Frequency of multiget requests, 0 for no multi-get, 100 for only multi-get." float default="0.0"
+option "keycache_capacity" - "Cached key capacity. (default 10000)" int default="10000"
+option "keycache_reuse" - "Number of times to reuse key cache before generating new req sequence. (Default 100)" int default="100"
+option "keycache_regen" - "When regenerating control number of requests to regenerate. (Default 1%)" int default="1"
+	   
 text "\nAgent-mode options:"
 option "agentmode" A "Run client in agent mode."
 option "agent" a "Enlist remote agent." string typestr="host" multiple
@@ -75,11 +84,6 @@ spread across threads and connections." int
 option "measure_depth" D "Set master client connection depth." int
 option "poll_freq" m "Set frequency in seconds for agent protocol recv polling." int default="1"
 option "poll_max" M "Set timeout for agent protocol recv polling. An agent not responding within time limit will be dropped." int default="120"
-option "getq_size" G "Size of queue for multiget requests." int default="100"
-option "getq_freq" g "Frequency of multiget requests, 0 for no multi-get, 100 for only multi-get." float default="0.0"
-option "keycache_capacity" - "Cached key capacity. (default 10000)" int default="10000"
-option "keycache_reuse" - "Number of times to reuse key cache before generating new req sequence. (Default 100)" int default="100"
-option "keycache_regen" - "When regenerating control number of requests to regenerate. (Default 1%)" int default="1"
 
 text "
 The --measure_* options aid in taking latency measurements of the

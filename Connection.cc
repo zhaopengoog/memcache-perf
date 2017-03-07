@@ -87,6 +87,9 @@ void Connection::reset() {
   stats = ConnectionStats(stats.sampling);
 }
 
+void Connection::issue_command(const char *cmd) {
+	evbuffer_add_printf(bufferevent_get_output(bev), "%s\r\n", cmd);
+}
 
 void Connection::issue_sasl() {
   read_state = WAITING_FOR_SASL;

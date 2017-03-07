@@ -67,6 +67,7 @@ public:
   void issue_set(const char* key, const char* value, int length,
                  double now = 0.0);
   void issue_something(double now = 0.0);
+  void issue_command(const char *cmd);
   void pop_op();
   bool check_exit_condition(double now = 0.0);
   void drive_write_machine(double now = 0.0);
