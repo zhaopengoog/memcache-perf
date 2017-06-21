@@ -1,9 +1,9 @@
-VERSION=0.2
+VERSION=0.3
 LIBS=-lzmq -levent -lpthread -lrt  
 CXXFLAGS= $(XFLAGS) -g -std=c++0x -D_GNU_SOURCE -O3 $(INCPATHFLAG)
 HEADERS= AdaptiveSampler.h barrier.h cmdline.h Connection.h ConnectionStats.h \
  Generator.h log.h mcperf.h util.h AgentStats.h binary_protocol.h \
- config.h ConnectionOptions.h distributions.h \
+ config.h ConnectionOptions.h distributions.h KeyGenerator.h \
  HistogramSampler.h LogHistogramSampler.h Operation.h cpu_stat_thread.h 
 CFILES= barrier.cc  cmdline.cc  Connection.cc  distributions.cc  \
  Generator.cc  log.cc  mcperf.cc  TestGenerator.cc  util.cc cpu_stat_thread.cc
@@ -36,6 +36,8 @@ cmdline:
 	gengetopt --input=cmdline.ggo --show-required 	
 
 zip: memcache-perf.tgz
+
+release: memcache-perf.tgz
 
 memcache-perf.tgz: $(SRCS)
 	tar --transform=s,^,memcache-perf-$(VERSION)/, -cvzf memcache-perf-$(VERSION).tgz $(SRCS) *.h Makefile COPYING README.md 

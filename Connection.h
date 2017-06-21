@@ -13,6 +13,7 @@
 #include "ConnectionOptions.h"
 #include "ConnectionStats.h"
 #include "Generator.h"
+#include "KeyGenerator.h"
 #include "Operation.h"
 #include "util.h"
 
@@ -67,7 +68,8 @@ public:
   void issue_set(const char* key, const char* value, int length,
                  double now = 0.0);
   void issue_something(double now = 0.0);
-  void issue_command(const char *cmd);
+  void issue_command(char *cmd);
+  void issue_command(char const *cmd) { issue_command(const_cast<char *>(cmd)); }
   void pop_op();
   bool check_exit_condition(double now = 0.0);
   void drive_write_machine(double now = 0.0);
@@ -107,7 +109,8 @@ private:
 
   Generator *valuesize;
   Generator *keysize;
-  //KeyGenerator *keygen;
+  Generator *keyorder;
+  KeyGenerator *loadgen;
   CachingKeyGenerator *keygen;
   Generator *iagen;
 };

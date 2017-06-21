@@ -13,6 +13,7 @@
 #include "ConnectionStats.h"
 #include "distributions.h"
 #include "Generator.h"
+#include "KeyGenerator.h"
 #include "mcperf.h"
 #include "binary_protocol.h"
 #include "util.h"
@@ -32,13 +33,13 @@ Connection::Connection(struct event_base* _base, struct evdns_base* _evdns,
 {
   valuesize = createGenerator(options.valuesize);
   keysize = createGenerator(options.keysize);
-  //keygen = new KeyGenerator(keysize, options.records);
+  keyorder = createGenerator(options.keyorder);
   if (key_capacity>0) {
-	keygen=new CachingKeyGenerator(keysize, options.records, key_capacity, key_reuse, key_regen);
+	keygen=new CachingKeyGenerator(keysize, keyorder, options.records, key_capacity, key_reuse, key_regen);
   } else {
-	keygen=new CachingKeyGenerator(keysize, options.records);
+	keygen=new CachingKeyGenerator(keysize, keyorder, options.records);
   }
-
+  loadgen=new KeyGenerator(keysize,options.records);
 
   if (options.lambda <= 0) {
     iagen = createGenerator("0");
@@ -87,7 +88,7 @@ void Connection::reset() {
   stats = ConnectionStats(stats.sampling);
 }
 
-void Connection::issue_command(const char *cmd) {
+void Connection::issue_command(char *cmd) {
 	evbuffer_add_printf(bufferevent_get_output(bev), "%s\r\n", cmd);
 }
 
@@ -214,10 +215,6 @@ void Connection::issue_multi_get(int nkeys, double now) {
 		bufferevent_write(bev, op.key.c_str(), keylen);
 		l += 24 + keylen;
 	}
-	// Last one, send a GET req to end the queue
-	//op.key = keygen->generate(lrand48() % options.records);
-	//issue_get(op.key.c_str(),now);
-	
 	// Last, flush with NOOP
 		bufferevent_write(bev, &nh, 24); // size does not include extras
 		l += 24;
@@ -672,13 +669,10 @@ void Connection::read_callback() {
           if (loader_issued >= options.records) break;
 
           char key[256];
-          string keystr = keygen->generate(loader_issued);
+          string keystr = loadgen->generate(loader_issued);
           strcpy(key, keystr.c_str());
           int index = lrand48() % (1024 * 1024);
-          //          generate_key(loader_issued, options.keysize, key);
-          //          issue_set(key, &random_char[index], options.valuesize);
           issue_set(key, &random_char[index], valuesize->generate());
-
           loader_issued++;
         }
       }
@@ -773,7 +767,7 @@ void Connection::start_loading() {
 
     char key[256];
     int index = lrand48() % (1024 * 1024);
-    string keystr = keygen->generate(loader_issued);
+    string keystr = loadgen->generate(loader_issued);
     strcpy(key, keystr.c_str());
           //    generate_key(loader_issued, options.keysize, key);
     //    issue_set(key, &random_char[index], options.valuesize);

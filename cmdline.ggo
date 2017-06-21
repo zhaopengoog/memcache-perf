@@ -16,8 +16,11 @@ option "binary" - "Use binary memcached protocol instead of ASCII."
 option "qps" q "Target aggregate QPS. 0 = peak QPS." int default="0"
 option "time" t "Maximum time to run (seconds)." int default="5"
 
+option "profile" - "Select one of several predefined profiles." int 
 option "keysize" K "Length of memcached keys (distribution)."
        string default="30"
+option "keyorder" - "Selection of memcached keys to use (distribution)."
+       string  default="none"
 option "valuesize" V "Length of memcached values (distribution)."
        string default="200"
 
@@ -96,6 +99,15 @@ master queries at independent of other clients.  This theoretically
 normalizes the baseline queuing delay you expect to see across a wide
 range of --qps values.
 "
+
+text "
+Predefined profiles to approximate some use cases:
+1. memcached for web serving benchmark : p95, 20ms, FB key/value/IA, >4000 connections to the device under test.
+2. memcached for applications backends : p99, 10ms, 32B key , 1000B value, uniform IA,  >1000 connections
+3. memcached for low latency (e.g. stock trading): p99.9, 32B key, 200B value, uniform IA, QPS rate set to 100000	
+4. P99.9, 1 msec. Key size = 32 bytes; value size has uniform distribution from 100 bytes to 1k; 
+"
+
 
 text "
 Some options take a 'distribution' as an argument.

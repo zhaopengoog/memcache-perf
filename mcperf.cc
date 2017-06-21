@@ -75,6 +75,12 @@ void go(const vector<string> &servers, options_t &options,
 #endif
 );
 
+char const *command_string[] = {
+	"start_trace",
+	"stop_trace",
+	"shutdown"
+};
+
 void do_mcperf(const vector<string> &servers, options_t &options,
                  ConnectionStats &stats, bool master = true
 #ifdef HAVE_LIBZMQ
@@ -303,14 +309,6 @@ V("Got options: %d %s",options.connections,options.loadonly ? "loadonly" : optio
     vector<string> servers;
 	tokenize(server_opt,servers);
     s_send(socket, "ack");
-/*
-    vector<string> servers;
-
-    for (int i = 0; i < options.server_given; i++) {
-      servers.push_back(s_recv(socket));
-      s_send(socket, "ack");
-    }
-*/
 V("sent ack");
     vector<string>::iterator i;
 
@@ -658,18 +656,12 @@ int main(int argc, char **argv) {
   if (args.quiet_given) log_level = QUIET;
 
   if (args.depth_arg < 1) DIE("--depth must be >= 1");
-  //  if (args.valuesize_arg < 1 || args.valuesize_arg > 1024*1024)
-  //    DIE("--valuesize must be >= 1 and <= 1024*1024");
   if (args.qps_arg < 0) DIE("--qps must be >= 0");
   if (args.update_arg < 0.0 || args.update_arg > 1.0)
     DIE("--update must be >= 0.0 and <= 1.0");
   if (args.time_arg < 1) DIE("--time must be >= 1");
-  //  if (args.keysize_arg < MINIMUM_KEY_LENGTH)
-  //    DIE("--keysize must be >= %d", MINIMUM_KEY_LENGTH);
   if (args.connections_arg < 1 || args.connections_arg > MAXIMUM_CONNECTIONS)
     DIE("--connections must be between [1,%d]", MAXIMUM_CONNECTIONS);
-  //  if (get_distribution(args.iadist_arg) == -1)
-  //    DIE("--iadist invalid: %s", args.iadist_arg);
   if (!args.server_given && !args.agentmode_given)
     DIE("--server or --agentmode must be specified.");
 
@@ -686,6 +678,7 @@ int main(int argc, char **argv) {
 
   //  if ((evdns = evdns_base_new(base, 1)) == 0) DIE("evdns");
   options_t options;
+  bzero(&options, sizeof(options_t));
   args_to_options(&options);
 
 #ifdef HAVE_LIBZMQ
@@ -888,9 +881,9 @@ int main(int argc, char **argv) {
     stats.print_stats("update", stats.set_sampler);
     stats.print_stats("op_q",   stats.op_sampler);
 
-    uint64_t total = stats.gets + stats.sets;
+    float total = (float)(stats.gets + stats.sets);
 
-    printf("\nTotal QPS = %.1f (%" PRIu64 " / %.1fs)\n",
+    printf("\nTotal QPS = %.1f (%.0f / %.1fs)\n",
            total / (stats.stop - stats.start),
            total, stats.stop - stats.start);
 
@@ -898,6 +891,8 @@ int main(int argc, char **argv) {
       printf("Peak QPS  = %.1f\n", peak_qps);
 
     printf("\n");
+	
+	printf("Total connections = %d\n", options.connections * options.server_given * options.threads);
 
     printf("Misses = %" PRIu64 " (%.1f%%)\n", stats.get_misses,
            (double) stats.get_misses/stats.gets*100);
@@ -1051,7 +1046,7 @@ D("Waiting for thread %d.",t);
 
 #ifdef HAVE_LIBZMQ
 	if (args.agent_given || args.agentmode_given) {
-    	uint64_t total = stats.gets + stats.sets;
+    	float total = (float)(stats.gets) + (float)stats.sets;
 
 	    V("Local QPS = %.1f (%d / %.1fs)",
     	total / (stats.stop - stats.start),
@@ -1183,6 +1178,7 @@ void do_mcperf(const vector<string>& servers, options_t& options,
   D("evt based loop end\n");
 
   // Load database on lead connection for each server.
+  // TODO: parallelize the database loading to multiple threads
   if (!options.noload) {
     D("Loading database.");
 	vector<Connection*>::iterator c;
@@ -1352,7 +1348,7 @@ void do_mcperf(const vector<string>& servers, options_t& options,
 		and at end of test, kill the server.
 	*/
         Connection *conn=*connections.begin();
-		conn->issue_command("start_trace");
+		conn->issue_command(command_string[0]);
 	}
          vector<Connection*>::iterator iconn;
     for (iconn= connections.begin(); iconn!=connections.end(); iconn++ ) {
@@ -1394,29 +1390,91 @@ void do_mcperf(const vector<string>& servers, options_t& options,
 		and at end of test, kill the server.
 	*/
         Connection *conn=*connections.begin();
-		conn->issue_command("stop_trace");
-		conn->issue_command("shutdown");
+		conn->issue_command(command_string[1]);
+		conn->issue_command(command_string[2]);
 		event_base_loop(base, loop_flag);
 	}
     V("stopped at %f  options.time = %d", get_time(), options.time);
 
   // Tear-down and accumulate stats.
-    for (iconn= connections.begin(); iconn!=connections.end(); iconn++ ) {
-        Connection *conn=*iconn;
-    stats.accumulate(conn->stats);
-    delete conn;
+	for (iconn= connections.begin(); iconn!=connections.end(); iconn++ ) {
+		Connection *conn=*iconn;
+		stats.accumulate(conn->stats);
+		delete conn;
+	}
+
+	stats.start = start;
+	stats.stop = now;
+
+	event_config_free(config);
+	evdns_base_free(evdns, 0);
+	event_base_free(base);
+}
+
+typedef struct mc_profile_s {
+	float min_c;
+	int r_size;
+	char const *search;
+	char const *ks;
+	char const *kg;
+	char const *v;
+	char const *ia;
+	int qps;
+} mc_profile;
+
+static mc_profile mc_profiles[] = {
+//1. memcached for web serving benchmark : p95, 20ms, FB key/value/IA, >4000 connections to the device under test.
+	{4000.,1000000,"95:20000","fb_key","none","fb_value","fb_ia",0},
+//2. memcached for applications backends : p99, 10ms, 32B key , 1000B value, uniform IA,  >1000 connections
+	{1000.,1000000,"99:10000","32","none","1000",NULL,0},
+//3. memcached for low latency (e.g. stock trading): p99.9, 32B key, 200B value, uniform IA, QPS rate set to 100000	
+	{1000.,1000000,NULL,"32","none","200",NULL,100000},
+//4. P99.9, 1 msec. Key size = 32 bytes; value size has uniform distribution from 100 bytes to 1k; 
+//	 key request should arrive with zipfian distribution; metric is QPS.
+//	Instead of zipf, use pareto distribution with scale of 16 and shape of 0.154971, 0 offset.
+	{1000.,1000000,"999:1000","32","pareto:0.0,16,0.154971","uniform:100,1000",NULL,0}
+};
+#define max_profiles (sizeof(mc_profiles)/sizeof(mc_profile))
+
+void profile_update_dist(char **arg, const char *update, unsigned int *given) {
+	if (update != NULL) {
+		*arg=strdup(update);
+		*given=1;
+	}
+}
+
+void parse_profile() {
+  if (args.profile_given) {
+	int profile=args.profile_arg;
+	if (profile>max_profiles || profile<1) {
+		V("Unrecognized Profile! Using profile 1 instead");
+		profile=1;
+	} 
+	mc_profile *p=&mc_profiles[profile-1];
+	//setup connections
+	int total_threads=args.server_given * args.threads_arg; 
+	int connections_per_thread=ceil(p->min_c/(float)total_threads); //assumes all servers are running on the same DUT
+	args.connections_arg=connections_per_thread;
+	//setup size
+	args.records_arg=p->r_size;
+	//setup mode
+	if (p->search != NULL) {
+		args.search_given=1;
+		args.search_arg=strdup(p->search);
+	}
+	//set distributions
+	profile_update_dist(&args.keysize_arg,p->ks,&args.keysize_given);
+	profile_update_dist(&args.valuesize_arg,p->v,&args.valuesize_given);
+	profile_update_dist(&args.iadist_arg,p->ia,&args.iadist_given);
+	profile_update_dist(&args.keyorder_arg,p->kg,&args.keyorder_given);
+	if (p->qps > 0) {
+		args.qps_arg = p->qps;
+	}
   }
-
-  stats.start = start;
-  stats.stop = now;
-
-  event_config_free(config);
-  evdns_base_free(evdns, 0);
-  event_base_free(base);
 }
 
 void args_to_options(options_t* options) {
-  //  bzero(options, sizeof(options_t));
+  parse_profile();
   options->connections = args.connections_arg;
   options->blocking = args.blocking_given;
   options->qps = args.qps_arg;
@@ -1424,6 +1482,8 @@ void args_to_options(options_t* options) {
   options->server_given = args.server_given;
   options->roundrobin = args.roundrobin_given;
 
+  //actual connections are connections per thread * number of threads
+  //allocation of connections via lambda
   int connections = options->connections;
   if (options->roundrobin) {
     connections *= (options->server_given > options->threads ?
@@ -1441,12 +1501,8 @@ void args_to_options(options_t* options) {
 
   options->lambda = (double) options->qps / (double) options->lambda_denom * args.lambda_mul_arg;
 
-  //  V("%d %d %d %f", options->qps, options->connections,
-  //  connections, options->lambda);
+  D("%d %d %d %f", options->qps, options->connections,connections, options->lambda);
 
-  //  if (args.no_record_scale_given)
-  //    options->records = args.records_arg;
-  //  else
   if (options->server_given==0)
 	options->server_given=1;
   options->records = args.records_arg / options->server_given;
@@ -1468,9 +1524,8 @@ void args_to_options(options_t* options) {
 
   if (!options->records) options->records = 1;
   strcpy(options->keysize, args.keysize_arg);
-  //  options->keysize = args.keysize_arg;
+  strcpy(options->keyorder, args.keyorder_arg);
   strcpy(options->valuesize, args.valuesize_arg);
-  //  options->valuesize = args.valuesize_arg;
   options->update = args.update_arg;
   options->time = args.time_arg;
   options->loadonly = args.loadonly_given;

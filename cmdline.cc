@@ -43,7 +43,9 @@ const char *gengetopt_args_info_help[] = {
   "      --binary                  Use binary memcached protocol instead of ASCII.",
   "  -q, --qps=INT                 Target aggregate QPS. 0 = peak QPS.\n                                  (default=`0')",
   "  -t, --time=INT                Maximum time to run (seconds).  (default=`5')",
+  "      --profile=INT             Select one of several predefined profiles.",
   "  -K, --keysize=STRING          Length of memcached keys (distribution).\n                                  (default=`30')",
+  "      --keyorder=STRING         Selection of memcached keys to use\n                                  (distribution).  (default=`none')",
   "  -V, --valuesize=STRING        Length of memcached values (distribution).\n                                  (default=`200')",
   "  -r, --records=INT             Number of memcached records to use.  If\n                                  multiple memcached servers are given, this\n                                  number is divided by the number of servers.\n                                  (default=`10000')",
   "  -u, --update=FLOAT            Ratio of set:get commands.  (default=`0.0')",
@@ -83,7 +85,7 @@ const char *gengetopt_args_info_help[] = {
   "  -D, --measure_depth=INT       Set master client connection depth.",
   "  -m, --poll_freq=INT           Set frequency in seconds for agent protocol\n                                  recv polling.  (default=`1')",
   "  -M, --poll_max=INT            Set timeout for agent protocol recv polling. An\n                                  agent not responding within time limit will\n                                  be dropped.  (default=`120')",
-  "\nThe --measure_* options aid in taking latency measurements of the\nmemcached server without incurring significant client-side queuing\ndelay.  --measure_connections allows the master to override the\n--connections option.  --measure_depth allows the master to operate as\nan \"open-loop\" client while other agents continue as a regular\nclosed-loop clients.  --measure_qps lets you modulate the QPS the\nmaster queries at independent of other clients.  This theoretically\nnormalizes the baseline queuing delay you expect to see across a wide\nrange of --qps values.\n\nSome options take a 'distribution' as an argument.\nDistributions are specified by <distribution>[:<param1>[,...]].\nParameters are not required.  The following distributions are supported:\n\n   [fixed:]<value>              Always generates <value>.\n   uniform:<max>                Uniform distribution between 0 and <max>.\n   normal:<mean>,<sd>           Normal distribution.\n   exponential:<lambda>         Exponential distribution.\n   pareto:<loc>,<scale>,<shape> Generalized Pareto distribution.\n   gev:<loc>,<scale>,<shape>    Generalized Extreme Value distribution.\n\n   To recreate the Facebook \"ETC\" request stream from [1], the\n   following hard-coded distributions are also provided:\n\n   fb_value   = a hard-coded discrete and GPareto PDF of value sizes\n   fb_key     = \"gev:30.7984,8.20449,0.078688\", key-size distribution\n   fb_ia      = \"pareto:0.0,16.0292,0.154971\", inter-arrival time dist.\n\n[1] Berk Atikoglu et al., Workload Analysis of a Large-Scale Key-Value Store,\n    SIGMETRICS 2012\n",
+  "\nThe --measure_* options aid in taking latency measurements of the\nmemcached server without incurring significant client-side queuing\ndelay.  --measure_connections allows the master to override the\n--connections option.  --measure_depth allows the master to operate as\nan \"open-loop\" client while other agents continue as a regular\nclosed-loop clients.  --measure_qps lets you modulate the QPS the\nmaster queries at independent of other clients.  This theoretically\nnormalizes the baseline queuing delay you expect to see across a wide\nrange of --qps values.\n\nPredefined profiles to approximate some use cases:\n1. memcached for web serving benchmark : p95, 20ms, FB key/value/IA, >4000\nconnections to the device under test.\n2. memcached for applications backends : p99, 10ms, 32B key , 1000B value,\nuniform IA,  >1000 connections\n3. memcached for low latency (e.g. stock trading): p99.9, 32B key, 200B value,\nuniform IA, QPS rate set to 100000	\n4. P99.9, 1 msec. Key size = 32 bytes; value size has uniform distribution from\n100 bytes to 1k; \n\nSome options take a 'distribution' as an argument.\nDistributions are specified by <distribution>[:<param1>[,...]].\nParameters are not required.  The following distributions are supported:\n\n   [fixed:]<value>              Always generates <value>.\n   uniform:<max>                Uniform distribution between 0 and <max>.\n   normal:<mean>,<sd>           Normal distribution.\n   exponential:<lambda>         Exponential distribution.\n   pareto:<loc>,<scale>,<shape> Generalized Pareto distribution.\n   gev:<loc>,<scale>,<shape>    Generalized Extreme Value distribution.\n\n   To recreate the Facebook \"ETC\" request stream from [1], the\n   following hard-coded distributions are also provided:\n\n   fb_value   = a hard-coded discrete and GPareto PDF of value sizes\n   fb_key     = \"gev:30.7984,8.20449,0.078688\", key-size distribution\n   fb_ia      = \"pareto:0.0,16.0292,0.154971\", inter-arrival time dist.\n\n[1] Berk Atikoglu et al., Workload Analysis of a Large-Scale Key-Value Store,\n    SIGMETRICS 2012\n",
     0
 };
 
@@ -143,7 +145,9 @@ void clear_given (struct gengetopt_args_info *args_info)
   args_info->binary_given = 0 ;
   args_info->qps_given = 0 ;
   args_info->time_given = 0 ;
+  args_info->profile_given = 0 ;
   args_info->keysize_given = 0 ;
+  args_info->keyorder_given = 0 ;
   args_info->valuesize_given = 0 ;
   args_info->records_given = 0 ;
   args_info->update_given = 0 ;
@@ -193,8 +197,11 @@ void clear_args (struct gengetopt_args_info *args_info)
   args_info->qps_orig = NULL;
   args_info->time_arg = 5;
   args_info->time_orig = NULL;
+  args_info->profile_orig = NULL;
   args_info->keysize_arg = gengetopt_strdup ("30");
   args_info->keysize_orig = NULL;
+  args_info->keyorder_arg = gengetopt_strdup ("none");
+  args_info->keyorder_orig = NULL;
   args_info->valuesize_arg = gengetopt_strdup ("200");
   args_info->valuesize_orig = NULL;
   args_info->records_arg = 10000;
@@ -264,46 +271,48 @@ void init_args_info(struct gengetopt_args_info *args_info)
   args_info->binary_help = gengetopt_args_info_help[6] ;
   args_info->qps_help = gengetopt_args_info_help[7] ;
   args_info->time_help = gengetopt_args_info_help[8] ;
-  args_info->keysize_help = gengetopt_args_info_help[9] ;
-  args_info->valuesize_help = gengetopt_args_info_help[10] ;
-  args_info->records_help = gengetopt_args_info_help[11] ;
-  args_info->update_help = gengetopt_args_info_help[12] ;
-  args_info->username_help = gengetopt_args_info_help[14] ;
-  args_info->password_help = gengetopt_args_info_help[15] ;
-  args_info->threads_help = gengetopt_args_info_help[16] ;
-  args_info->affinity_help = gengetopt_args_info_help[17] ;
-  args_info->connections_help = gengetopt_args_info_help[18] ;
-  args_info->depth_help = gengetopt_args_info_help[19] ;
-  args_info->roundrobin_help = gengetopt_args_info_help[20] ;
-  args_info->iadist_help = gengetopt_args_info_help[21] ;
-  args_info->skip_help = gengetopt_args_info_help[22] ;
-  args_info->moderate_help = gengetopt_args_info_help[23] ;
-  args_info->noload_help = gengetopt_args_info_help[24] ;
-  args_info->loadonly_help = gengetopt_args_info_help[25] ;
-  args_info->blocking_help = gengetopt_args_info_help[26] ;
-  args_info->no_nodelay_help = gengetopt_args_info_help[27] ;
-  args_info->warmup_help = gengetopt_args_info_help[28] ;
-  args_info->wait_help = gengetopt_args_info_help[29] ;
-  args_info->save_help = gengetopt_args_info_help[30] ;
-  args_info->search_help = gengetopt_args_info_help[31] ;
-  args_info->scan_help = gengetopt_args_info_help[32] ;
-  args_info->trace_help = gengetopt_args_info_help[33] ;
-  args_info->getq_size_help = gengetopt_args_info_help[34] ;
-  args_info->getq_freq_help = gengetopt_args_info_help[35] ;
-  args_info->keycache_capacity_help = gengetopt_args_info_help[36] ;
-  args_info->keycache_reuse_help = gengetopt_args_info_help[37] ;
-  args_info->keycache_regen_help = gengetopt_args_info_help[38] ;
-  args_info->agentmode_help = gengetopt_args_info_help[40] ;
-  args_info->agent_help = gengetopt_args_info_help[41] ;
+  args_info->profile_help = gengetopt_args_info_help[9] ;
+  args_info->keysize_help = gengetopt_args_info_help[10] ;
+  args_info->keyorder_help = gengetopt_args_info_help[11] ;
+  args_info->valuesize_help = gengetopt_args_info_help[12] ;
+  args_info->records_help = gengetopt_args_info_help[13] ;
+  args_info->update_help = gengetopt_args_info_help[14] ;
+  args_info->username_help = gengetopt_args_info_help[16] ;
+  args_info->password_help = gengetopt_args_info_help[17] ;
+  args_info->threads_help = gengetopt_args_info_help[18] ;
+  args_info->affinity_help = gengetopt_args_info_help[19] ;
+  args_info->connections_help = gengetopt_args_info_help[20] ;
+  args_info->depth_help = gengetopt_args_info_help[21] ;
+  args_info->roundrobin_help = gengetopt_args_info_help[22] ;
+  args_info->iadist_help = gengetopt_args_info_help[23] ;
+  args_info->skip_help = gengetopt_args_info_help[24] ;
+  args_info->moderate_help = gengetopt_args_info_help[25] ;
+  args_info->noload_help = gengetopt_args_info_help[26] ;
+  args_info->loadonly_help = gengetopt_args_info_help[27] ;
+  args_info->blocking_help = gengetopt_args_info_help[28] ;
+  args_info->no_nodelay_help = gengetopt_args_info_help[29] ;
+  args_info->warmup_help = gengetopt_args_info_help[30] ;
+  args_info->wait_help = gengetopt_args_info_help[31] ;
+  args_info->save_help = gengetopt_args_info_help[32] ;
+  args_info->search_help = gengetopt_args_info_help[33] ;
+  args_info->scan_help = gengetopt_args_info_help[34] ;
+  args_info->trace_help = gengetopt_args_info_help[35] ;
+  args_info->getq_size_help = gengetopt_args_info_help[36] ;
+  args_info->getq_freq_help = gengetopt_args_info_help[37] ;
+  args_info->keycache_capacity_help = gengetopt_args_info_help[38] ;
+  args_info->keycache_reuse_help = gengetopt_args_info_help[39] ;
+  args_info->keycache_regen_help = gengetopt_args_info_help[40] ;
+  args_info->agentmode_help = gengetopt_args_info_help[42] ;
+  args_info->agent_help = gengetopt_args_info_help[43] ;
   args_info->agent_min = 0;
   args_info->agent_max = 0;
-  args_info->agent_port_help = gengetopt_args_info_help[42] ;
-  args_info->lambda_mul_help = gengetopt_args_info_help[43] ;
-  args_info->measure_connections_help = gengetopt_args_info_help[44] ;
-  args_info->measure_qps_help = gengetopt_args_info_help[45] ;
-  args_info->measure_depth_help = gengetopt_args_info_help[46] ;
-  args_info->poll_freq_help = gengetopt_args_info_help[47] ;
-  args_info->poll_max_help = gengetopt_args_info_help[48] ;
+  args_info->agent_port_help = gengetopt_args_info_help[44] ;
+  args_info->lambda_mul_help = gengetopt_args_info_help[45] ;
+  args_info->measure_connections_help = gengetopt_args_info_help[46] ;
+  args_info->measure_qps_help = gengetopt_args_info_help[47] ;
+  args_info->measure_depth_help = gengetopt_args_info_help[48] ;
+  args_info->poll_freq_help = gengetopt_args_info_help[49] ;
+  args_info->poll_max_help = gengetopt_args_info_help[50] ;
   
 }
 
@@ -436,8 +445,11 @@ cmdline_parser_release (struct gengetopt_args_info *args_info)
   free_multiple_string_field (args_info->server_given, &(args_info->server_arg), &(args_info->server_orig));
   free_string_field (&(args_info->qps_orig));
   free_string_field (&(args_info->time_orig));
+  free_string_field (&(args_info->profile_orig));
   free_string_field (&(args_info->keysize_arg));
   free_string_field (&(args_info->keysize_orig));
+  free_string_field (&(args_info->keyorder_arg));
+  free_string_field (&(args_info->keyorder_orig));
   free_string_field (&(args_info->valuesize_arg));
   free_string_field (&(args_info->valuesize_orig));
   free_string_field (&(args_info->records_orig));
@@ -525,8 +537,12 @@ cmdline_parser_dump(FILE *outfile, struct gengetopt_args_info *args_info)
     write_into_file(outfile, "qps", args_info->qps_orig, 0);
   if (args_info->time_given)
     write_into_file(outfile, "time", args_info->time_orig, 0);
+  if (args_info->profile_given)
+    write_into_file(outfile, "profile", args_info->profile_orig, 0);
   if (args_info->keysize_given)
     write_into_file(outfile, "keysize", args_info->keysize_orig, 0);
+  if (args_info->keyorder_given)
+    write_into_file(outfile, "keyorder", args_info->keyorder_orig, 0);
   if (args_info->valuesize_given)
     write_into_file(outfile, "valuesize", args_info->valuesize_orig, 0);
   if (args_info->records_given)
@@ -1171,7 +1187,9 @@ cmdline_parser_internal (
         { "binary",	0, NULL, 0 },
         { "qps",	1, NULL, 'q' },
         { "time",	1, NULL, 't' },
+        { "profile",	1, NULL, 0 },
         { "keysize",	1, NULL, 'K' },
+        { "keyorder",	1, NULL, 0 },
         { "valuesize",	1, NULL, 'V' },
         { "records",	1, NULL, 'r' },
         { "update",	1, NULL, 'u' },
@@ -1614,6 +1632,34 @@ cmdline_parser_internal (
                 &(local_args_info.binary_given), optarg, 0, 0, ARG_NO,
                 check_ambiguity, override, 0, 0,
                 "binary", '-',
+                additional_error))
+              goto failure;
+          
+          }
+          /* Select one of several predefined profiles..  */
+          else if (strcmp (long_options[option_index].name, "profile") == 0)
+          {
+          
+          
+            if (update_arg( (void *)&(args_info->profile_arg), 
+                 &(args_info->profile_orig), &(args_info->profile_given),
+                &(local_args_info.profile_given), optarg, 0, 0, ARG_INT,
+                check_ambiguity, override, 0, 0,
+                "profile", '-',
+                additional_error))
+              goto failure;
+          
+          }
+          /* Selection of memcached keys to use (distribution)..  */
+          else if (strcmp (long_options[option_index].name, "keyorder") == 0)
+          {
+          
+          
+            if (update_arg( (void *)&(args_info->keyorder_arg), 
+                 &(args_info->keyorder_orig), &(args_info->keyorder_given),
+                &(local_args_info.keyorder_given), optarg, 0, "none", ARG_STRING,
+                check_ambiguity, override, 0, 0,
+                "keyorder", '-',
                 additional_error))
               goto failure;
           

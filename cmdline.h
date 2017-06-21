@@ -55,9 +55,15 @@ struct gengetopt_args_info
   int time_arg;	/**< @brief Maximum time to run (seconds). (default='5').  */
   char * time_orig;	/**< @brief Maximum time to run (seconds). original value given at command line.  */
   const char *time_help; /**< @brief Maximum time to run (seconds). help description.  */
+  int profile_arg;	/**< @brief Select one of several predefined profiles..  */
+  char * profile_orig;	/**< @brief Select one of several predefined profiles. original value given at command line.  */
+  const char *profile_help; /**< @brief Select one of several predefined profiles. help description.  */
   char * keysize_arg;	/**< @brief Length of memcached keys (distribution). (default='30').  */
   char * keysize_orig;	/**< @brief Length of memcached keys (distribution). original value given at command line.  */
   const char *keysize_help; /**< @brief Length of memcached keys (distribution). help description.  */
+  char * keyorder_arg;	/**< @brief Selection of memcached keys to use (distribution). (default='none').  */
+  char * keyorder_orig;	/**< @brief Selection of memcached keys to use (distribution). original value given at command line.  */
+  const char *keyorder_help; /**< @brief Selection of memcached keys to use (distribution). help description.  */
   char * valuesize_arg;	/**< @brief Length of memcached values (distribution). (default='200').  */
   char * valuesize_orig;	/**< @brief Length of memcached values (distribution). original value given at command line.  */
   const char *valuesize_help; /**< @brief Length of memcached values (distribution). help description.  */
@@ -160,7 +166,9 @@ struct gengetopt_args_info
   unsigned int binary_given ;	/**< @brief Whether binary was given.  */
   unsigned int qps_given ;	/**< @brief Whether qps was given.  */
   unsigned int time_given ;	/**< @brief Whether time was given.  */
+  unsigned int profile_given ;	/**< @brief Whether profile was given.  */
   unsigned int keysize_given ;	/**< @brief Whether keysize was given.  */
+  unsigned int keyorder_given ;	/**< @brief Whether keyorder was given.  */
   unsigned int valuesize_given ;	/**< @brief Whether valuesize was given.  */
   unsigned int records_given ;	/**< @brief Whether records was given.  */
   unsigned int update_given ;	/**< @brief Whether update was given.  */
