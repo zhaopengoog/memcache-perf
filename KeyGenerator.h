@@ -66,7 +66,7 @@ public:
   DistKeyGenerator(Generator* _ks, Generator* _kg, double _max = 10000) : KeyGenerator(_ks,_max), kg(_kg) {  }
   std::string generate(uint64_t ind) {
 	double ridx = drand48();
-    ind = (uint64_t)kg->generate(ridx) % max;
+    ind = (uint64_t)kg->generate(ridx) % (uint64_t)max;
     uint64_t h = fnv_64(ind);
     int keylen = keysize(h);
     snprintf(key, max_memcached_len, "%0*" PRIu64, keylen, ind);

@@ -1392,7 +1392,6 @@ void do_mcperf(const vector<string>& servers, options_t& options,
         Connection *conn=*connections.begin();
 		conn->issue_command(command_string[1]);
 		conn->issue_command(command_string[2]);
-		event_base_loop(base, loop_flag);
 	}
     V("stopped at %f  options.time = %d", get_time(), options.time);
 
@@ -1420,25 +1419,33 @@ typedef struct mc_profile_s {
 	char const *v;
 	char const *ia;
 	int qps;
+	int cc,cr,cg; // key cache parameters
 } mc_profile;
 
 static mc_profile mc_profiles[] = {
 //1. memcached for web serving benchmark : p95, 20ms, FB key/value/IA, >4000 connections to the device under test.
-	{4000.,1000000,"95:20000","fb_key","none","fb_value","fb_ia",0},
+	{4000.,1000000,"95:20000","fb_key","none","fb_value","fb_ia",0,10000,20,1},
 //2. memcached for applications backends : p99, 10ms, 32B key , 1000B value, uniform IA,  >1000 connections
-	{1000.,1000000,"99:10000","32","none","1000",NULL,0},
+	{1000.,1000000,"99:10000","32","none","1000",NULL,0,10000,10,1},
 //3. memcached for low latency (e.g. stock trading): p99.9, 32B key, 200B value, uniform IA, QPS rate set to 100000	
-	{1000.,1000000,NULL,"32","none","200",NULL,100000},
+	{1.,1000000,NULL,"32","none","200",NULL,100000,10000,5,1},
 //4. P99.9, 1 msec. Key size = 32 bytes; value size has uniform distribution from 100 bytes to 1k; 
 //	 key request should arrive with zipfian distribution; metric is QPS.
 //	Instead of zipf, use pareto distribution with scale of 16 and shape of 0.154971, 0 offset.
-	{1000.,1000000,"999:1000","32","pareto:0.0,16,0.154971","uniform:100,1000",NULL,0}
+	{100.,1000000,"999:1000","32","pareto:0.0,16,0.154971","uniform:100,1000",NULL,0,10000,10,1}
 };
 #define max_profiles (sizeof(mc_profiles)/sizeof(mc_profile))
 
 void profile_update_dist(char **arg, const char *update, unsigned int *given) {
 	if (update != NULL) {
 		*arg=strdup(update);
+		*given=1;
+	}
+}
+
+void profile_update_dist(int *arg, const int update, unsigned int *given) {
+	if (update != 0) {
+		*arg=update;
 		*given=1;
 	}
 }
@@ -1454,7 +1461,8 @@ void parse_profile() {
 	//setup connections
 	int total_threads=args.server_given * args.threads_arg; 
 	int connections_per_thread=ceil(p->min_c/(float)total_threads); //assumes all servers are running on the same DUT
-	args.connections_arg=connections_per_thread;
+	if (args.connections_arg < connections_per_thread)
+		args.connections_arg=connections_per_thread;
 	//setup size
 	args.records_arg=p->r_size;
 	//setup mode
@@ -1467,6 +1475,9 @@ void parse_profile() {
 	profile_update_dist(&args.valuesize_arg,p->v,&args.valuesize_given);
 	profile_update_dist(&args.iadist_arg,p->ia,&args.iadist_given);
 	profile_update_dist(&args.keyorder_arg,p->kg,&args.keyorder_given);
+	profile_update_dist(&args.keycache_capacity_arg,p->cc,&args.keycache_capacity_given);
+	profile_update_dist(&args.keycache_reuse_arg,p->cc,&args.keycache_reuse_given);
+	profile_update_dist(&args.keycache_regen_arg,p->cc,&args.keycache_regen_given);
 	if (p->qps > 0) {
 		args.qps_arg = p->qps;
 	}
