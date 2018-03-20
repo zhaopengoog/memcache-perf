@@ -30,10 +30,18 @@ clean:
 	rm -f *.o *.d mcperf
 
 apt-get:
-	apt install -y uuid uuid-dev libpgm-dev libzmq-dev libevent-dev gengetopt
+	apt install -y uuid uuid-dev libpgm-dev libevent-dev gengetopt
+	apt install -y libzmq libzmq-dev
+	apt install -y libzmq5 libzmq5-dev
 
 cmdline:
 	gengetopt --input=cmdline.ggo --show-required 	
+	gengetopt --input=cmdline.ggo --show-required --show-help > README.help
+	sed -e '/Command/,$$d' README.md > README.base
+	grep "Command" README.md >> README.base
+	echo "==================" >> README.base
+	cat README.help >> README.md
+	rm README.help
 
 zip: memcache-perf.tgz
 
