@@ -41,7 +41,7 @@ cmdline:
 	grep "Command" README.md >> README.base
 	echo "==================" >> README.base
 	cat README.help >> README.md
-	rm README.help
+	rm README.help README.base
 
 zip: memcache-perf.tgz
 
