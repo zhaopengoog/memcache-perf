@@ -17,7 +17,7 @@ HEADERS += gnuplot_i.h
 SRCS += gnuplot_i.c gnuplot_i.h
 endif
 ifdef STATIC
-LIBS += -lpgm -lpthread -luuid -ldl
+LIBS += -lpgm -luuid -ldl
 XFLAGS += -static 
 endif
 

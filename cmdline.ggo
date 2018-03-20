@@ -1,5 +1,5 @@
 package "mcperf"
-version "0.2"
+version "0.3"
 usage "mcperf -s server[:port] [options]"
 description "\"High-performance\" memcached benchmarking tool"
 
