@@ -75,6 +75,7 @@ const char *gengetopt_args_info_help[] = {
   "      --keycache_capacity=INT   Cached key capacity. (default 10000)\n                                  (default=`10000')",
   "      --keycache_reuse=INT      Number of times to reuse key cache before\n                                  generating new req sequence. (Default 100)\n                                  (default=`100')",
   "      --keycache_regen=INT      When regenerating control number of requests to\n                                  regenerate. (Default 1%)  (default=`1')",
+  "      --plot_all                Create plot/csv of latency histogram at each\n                                  step when using gnuplot and loghistogram\n                                  sampler",
   "\nAgent-mode options:",
   "  -A, --agentmode               Run client in agent mode.",
   "  -a, --agent=host              Enlist remote agent.",
@@ -176,6 +177,7 @@ void clear_given (struct gengetopt_args_info *args_info)
   args_info->keycache_capacity_given = 0 ;
   args_info->keycache_reuse_given = 0 ;
   args_info->keycache_regen_given = 0 ;
+  args_info->plot_all_given = 0 ;
   args_info->agentmode_given = 0 ;
   args_info->agent_given = 0 ;
   args_info->agent_port_given = 0 ;
@@ -302,17 +304,18 @@ void init_args_info(struct gengetopt_args_info *args_info)
   args_info->keycache_capacity_help = gengetopt_args_info_help[38] ;
   args_info->keycache_reuse_help = gengetopt_args_info_help[39] ;
   args_info->keycache_regen_help = gengetopt_args_info_help[40] ;
-  args_info->agentmode_help = gengetopt_args_info_help[42] ;
-  args_info->agent_help = gengetopt_args_info_help[43] ;
+  args_info->plot_all_help = gengetopt_args_info_help[41] ;
+  args_info->agentmode_help = gengetopt_args_info_help[43] ;
+  args_info->agent_help = gengetopt_args_info_help[44] ;
   args_info->agent_min = 0;
   args_info->agent_max = 0;
-  args_info->agent_port_help = gengetopt_args_info_help[44] ;
-  args_info->lambda_mul_help = gengetopt_args_info_help[45] ;
-  args_info->measure_connections_help = gengetopt_args_info_help[46] ;
-  args_info->measure_qps_help = gengetopt_args_info_help[47] ;
-  args_info->measure_depth_help = gengetopt_args_info_help[48] ;
-  args_info->poll_freq_help = gengetopt_args_info_help[49] ;
-  args_info->poll_max_help = gengetopt_args_info_help[50] ;
+  args_info->agent_port_help = gengetopt_args_info_help[45] ;
+  args_info->lambda_mul_help = gengetopt_args_info_help[46] ;
+  args_info->measure_connections_help = gengetopt_args_info_help[47] ;
+  args_info->measure_qps_help = gengetopt_args_info_help[48] ;
+  args_info->measure_depth_help = gengetopt_args_info_help[49] ;
+  args_info->poll_freq_help = gengetopt_args_info_help[50] ;
+  args_info->poll_max_help = gengetopt_args_info_help[51] ;
   
 }
 
@@ -599,6 +602,8 @@ cmdline_parser_dump(FILE *outfile, struct gengetopt_args_info *args_info)
     write_into_file(outfile, "keycache_reuse", args_info->keycache_reuse_orig, 0);
   if (args_info->keycache_regen_given)
     write_into_file(outfile, "keycache_regen", args_info->keycache_regen_orig, 0);
+  if (args_info->plot_all_given)
+    write_into_file(outfile, "plot_all", 0, 0 );
   if (args_info->agentmode_given)
     write_into_file(outfile, "agentmode", 0, 0 );
   write_multiple_into_file(outfile, args_info->agent_given, "agent", args_info->agent_orig, 0);
@@ -1218,6 +1223,7 @@ cmdline_parser_internal (
         { "keycache_capacity",	1, NULL, 0 },
         { "keycache_reuse",	1, NULL, 0 },
         { "keycache_regen",	1, NULL, 0 },
+        { "plot_all",	0, NULL, 0 },
         { "agentmode",	0, NULL, 'A' },
         { "agent",	1, NULL, 'a' },
         { "agent_port",	1, NULL, 'p' },
@@ -1814,6 +1820,20 @@ cmdline_parser_internal (
                 &(local_args_info.keycache_regen_given), optarg, 0, "1", ARG_INT,
                 check_ambiguity, override, 0, 0,
                 "keycache_regen", '-',
+                additional_error))
+              goto failure;
+          
+          }
+          /* Create plot/csv of latency histogram at each step when using gnuplot and loghistogram sampler.  */
+          else if (strcmp (long_options[option_index].name, "plot_all") == 0)
+          {
+          
+          
+            if (update_arg( 0 , 
+                 0 , &(args_info->plot_all_given),
+                &(local_args_info.plot_all_given), optarg, 0, 0, ARG_NO,
+                check_ambiguity, override, 0, 0,
+                "plot_all", '-',
                 additional_error))
               goto failure;
           

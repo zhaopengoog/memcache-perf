@@ -30,7 +30,7 @@ class ConnectionStats {
 #else
    get_sampler(LOGSAMPLER_BINS), set_sampler(LOGSAMPLER_BINS), op_sampler(LOGSAMPLER_BINS),
 #endif
-   rx_bytes(0), tx_bytes(0), gets(0), sets(0), start(0), stop(0),
+   rx_bytes(0), tx_bytes(0), gets(0), sets(0), start(0), stop(0), plotall(false)
    get_misses(0), skips(0), sampling(_sampling) {
    }
 
@@ -55,6 +55,7 @@ class ConnectionStats {
   double start, stop;
 
   bool sampling;
+  bool plotall;
 
   void log_get(Operation& op) { if (sampling) get_sampler.sample(op); gets++; }
   void log_set(Operation& op) { if (sampling) set_sampler.sample(op); sets++; }
@@ -243,7 +244,7 @@ class ConnectionStats {
     if (newline) 
 	printf("\n");
 
-    if (plotit)
+    if (plotit || plotall)
 	sampler.plot(tag,get_qps());
   }
 #endif

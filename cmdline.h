@@ -130,6 +130,7 @@ struct gengetopt_args_info
   int keycache_regen_arg;	/**< @brief When regenerating control number of requests to regenerate. (Default 1%) (default='1').  */
   char * keycache_regen_orig;	/**< @brief When regenerating control number of requests to regenerate. (Default 1%) original value given at command line.  */
   const char *keycache_regen_help; /**< @brief When regenerating control number of requests to regenerate. (Default 1%) help description.  */
+  const char *plot_all_help; /**< @brief Create plot/csv of latency histogram at each step when using gnuplot and loghistogram sampler help description.  */
   const char *agentmode_help; /**< @brief Run client in agent mode. help description.  */
   char ** agent_arg;	/**< @brief Enlist remote agent..  */
   char ** agent_orig;	/**< @brief Enlist remote agent. original value given at command line.  */
@@ -197,6 +198,7 @@ struct gengetopt_args_info
   unsigned int keycache_capacity_given ;	/**< @brief Whether keycache_capacity was given.  */
   unsigned int keycache_reuse_given ;	/**< @brief Whether keycache_reuse was given.  */
   unsigned int keycache_regen_given ;	/**< @brief Whether keycache_regen was given.  */
+  unsigned int plot_all_given ;	/**< @brief Whether plot_all was given.  */
   unsigned int agentmode_given ;	/**< @brief Whether agentmode was given.  */
   unsigned int agent_given ;	/**< @brief Whether agent was given.  */
   unsigned int agent_port_given ;	/**< @brief Whether agent_port was given.  */

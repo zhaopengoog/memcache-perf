@@ -73,6 +73,7 @@ option "getq_freq" g "Frequency of multiget requests, 0 for no multi-get, 100 fo
 option "keycache_capacity" - "Cached key capacity. (default 10000)" int default="10000"
 option "keycache_reuse" - "Number of times to reuse key cache before generating new req sequence. (Default 100)" int default="100"
 option "keycache_regen" - "When regenerating control number of requests to regenerate. (Default 1%)" int default="1"
+option "plot_all" - "Create plot/csv of latency histogram at each step when using gnuplot and loghistogram sampler" 
 	   
 text "\nAgent-mode options:"
 option "agentmode" A "Run client in agent mode."

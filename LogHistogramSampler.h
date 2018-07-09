@@ -136,7 +136,7 @@ public:
 			break;
 	}
 	ilast=i+1;
-	V("Plotting bins %d to %d\n",ifirst,ilast);
+	D("Plotting bins %d to %d\n",ifirst,ilast);
 	//find end of latency bins
 	size=ilast-ifirst;
 

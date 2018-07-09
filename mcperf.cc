@@ -758,6 +758,8 @@ int main(int argc, char **argv) {
   }
 
   ConnectionStats stats;
+  if (args.plot_all_given)
+	stats.plotall=true;
 
   double peak_qps = 0.0;
   bool avgseek=false;
@@ -858,14 +860,11 @@ int main(int argc, char **argv) {
 
       options.qps = q;
       options.lambda = (double) options.qps / (double) options.lambda_denom * args.lambda_mul_arg;
-      //      options.lambda = (double) options.qps / options.connections /
-      //        args.server_given /
-      //        (args.threads_arg < 1 ? 1 : args.threads_arg);
 
       	stats = ConnectionStats();
 	reset_cpu_stats();
       	go(servers, options, stats);
-	printf("CPU Usage Stats (avg/min/max): %.2Lf%%,%.2Lf%%,%.2Lf%%\n",cpustat.avg,cpustat.min,cpustat.max);
+	D("CPU Usage Stats (avg/min/max): %.2Lf%%,%.2Lf%%,%.2Lf%%\n",cpustat.avg,cpustat.min,cpustat.max);
 
       	stats.print_stats("read", stats.get_sampler, false);
       	printf(" %8.1f", stats.get_qps());
