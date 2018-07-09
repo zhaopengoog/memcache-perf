@@ -30,7 +30,7 @@ class ConnectionStats {
 #else
    get_sampler(LOGSAMPLER_BINS), set_sampler(LOGSAMPLER_BINS), op_sampler(LOGSAMPLER_BINS),
 #endif
-   rx_bytes(0), tx_bytes(0), gets(0), sets(0), start(0), stop(0), plotall(false)
+   rx_bytes(0), tx_bytes(0), gets(0), sets(0), start(0), stop(0), plotall(false),
    get_misses(0), skips(0), sampling(_sampling) {
    }
 
