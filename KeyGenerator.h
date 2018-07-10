@@ -104,6 +104,9 @@ private:
 		iterations=0;
 		max_iterations=reuse;
 		regen_freedom=capacity*pct_regen/100;
+		if(regen_freedom == 0) {
+			regen_freedom = 1;
+		}
 	}
 	
 public:
