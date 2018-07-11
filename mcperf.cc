@@ -1047,7 +1047,7 @@ D("Waiting for thread %d.",t);
 	if (args.agent_given || args.agentmode_given) {
     	float total = (float)(stats.gets) + (float)stats.sets;
 
-	    V("Local QPS = %.1f (%d / %.1fs)",
+	    V("Local QPS = %.1f (%lld / %.1fs)",
     	total / (stats.stop - stats.start),
       	total, stats.stop - stats.start);    
 	}
