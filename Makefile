@@ -30,9 +30,9 @@ clean:
 	rm -f *.o *.d mcperf
 
 apt-get:
-	apt install -y uuid uuid-dev libpgm-dev libevent-dev gengetopt
-	apt install -y libzmq libzmq-dev
-	apt install -y libzmq5 libzmq5-dev
+	-apt install -y uuid uuid-dev libpgm-dev libevent-dev gengetopt
+	-apt install -y libzmq libzmq-dev
+	-apt install -y libzmq5 libzmq5-dev
 
 cmdline:
 	gengetopt --input=cmdline.ggo --show-required 	
