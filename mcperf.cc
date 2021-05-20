@@ -589,14 +589,30 @@ int sync_agent(zmq::socket_t* socket) {
 
 string name_to_ipaddr(string host, int addport=1) {
   char *s_copy = new char[host.length() + 1];
+  char ipaddr[INET6_ADDRSTRLEN];
   strcpy(s_copy, host.c_str());
 
   char *saveptr = NULL;  // For reentrant strtok().
 
-  char *h_ptr = strtok_r(s_copy, ":", &saveptr);
-  char *p_ptr = strtok_r(NULL, ":", &saveptr);
+  // We currently only use IP addresses directly
+#if 1
+    if (addport)
+          return host+string(":11211");
+    else
+          return host;
+#endif
 
-  char ipaddr[16];
+  //char *h_ptr = strtok_r(s_copy, ":", &saveptr);
+  //char *p_ptr = strtok_r(NULL, ":", &saveptr);
+
+    char* p_ptr=strrchr(s_copy,':'); /* Find the last ':' */
+    if (!p_ptr)
+      DIE("strtok(.., \":\") failed to parse %s", host.c_str());
+
+    p_ptr++;
+
+    char* h_ptr = s_copy;
+    h_ptr[p_ptr-s_copy-1] = '\0';
 
   if (h_ptr == NULL)
     DIE("strtok(.., \":\") failed to parse %s", host.c_str());
@@ -615,7 +631,7 @@ string name_to_ipaddr(string host, int addport=1) {
   hints.ai_socktype = SOCK_STREAM;
   hints.ai_protocol = IPPROTO_TCP; /* We want a TCP socket */
   /* Only return addresses we can use. */
-  hints.ai_flags = EVUTIL_AI_ADDRCONFIG;
+  // hints.ai_flags = EVUTIL_AI_ADDRCONFIG;
 
   /* Look up the hostname. */
   err = evutil_getaddrinfo(h_ptr, NULL, &hints, &answer);
@@ -627,18 +643,21 @@ string name_to_ipaddr(string host, int addport=1) {
   if (answer == NULL) DIE("No DNS answer.");
 
   void *ptr = NULL;
+  int addr_len = 0;
   switch (answer->ai_family) {
   case AF_INET:
     ptr = &((struct sockaddr_in *) answer->ai_addr)->sin_addr;
+    addr_len = INET_ADDRSTRLEN;
     break;
   case AF_INET6:
+    addr_len = INET6_ADDRSTRLEN;
     ptr = &((struct sockaddr_in6 *) answer->ai_addr)->sin6_addr;
     break;
   }
 
-  inet_ntop (answer->ai_family, ptr, ipaddr, 16);
+  inet_ntop (answer->ai_family, ptr, ipaddr, addr_len);
 
-  D("Resolved %s to %s", h_ptr, (string(ipaddr) + ":" + string(port)).c_str());
+  D("Resolved %s to %s (%d %d)", h_ptr, (string(ipaddr) + ":" + string(port)).c_str(), answer->ai_family, AF_INET6);
 
   delete[] s_copy;
   if (addport)
@@ -1116,20 +1135,25 @@ void do_mcperf(const vector<string>& servers, options_t& options,
     char *s_copy = new char[s->length() + 1];
     strcpy(s_copy, s->c_str());
 
-    char *h_ptr = strtok_r(s_copy, ":", &saveptr);
-    char *p_ptr = strtok_r(NULL, ":", &saveptr);
+    char* p_ptr = strrchr(s_copy,':'); /* Find the last ':' */
+    if (!p_ptr)
+      DIE("strtok(.., \":\") failed to parse %s", s->c_str());
 
-    if (h_ptr == NULL) DIE("strtok(.., \":\") failed to parse %s", s->c_str());
+    p_ptr++;
+
+    char* h_ptr = s_copy;
+    h_ptr[p_ptr-s_copy-1] = '\0';
 
     string hostname = h_ptr;
-    string port = "11211";
-    if (p_ptr) port = p_ptr;
+    string port = "11211" ;
+    if (p_ptr)
+	port = p_ptr;
 
     delete[] s_copy;
 
     int conns = args.measure_connections_given ? args.measure_connections_arg :
       options.connections;
-	D("Connections req %s %d [%d/%d]",s->c_str(),conns,args.measure_connections_arg,options.connections);
+	D("Connections req %s %d [%d/%d]",s->c_str(), conns, args.measure_connections_arg, options.connections);
 
     for (int c = 0; c < conns; c++) {
 
@@ -1341,8 +1365,8 @@ void do_mcperf(const vector<string>& servers, options_t& options,
     V("started at %f", get_time());
 
 	start = get_time();
-	if (args.trace_given) { 
-	/* 	To support tracing/simulation, in trace mode, 
+	if (args.trace_given) {
+	/* 	To support tracing/simulation, in trace mode,
 		send special start_trace/stop_trace commands to the server,
 		and at end of test, kill the server.
 	*/
@@ -1383,8 +1407,8 @@ void do_mcperf(const vector<string>& servers, options_t& options,
   }
 
   if (master && !args.scan_given && !args.search_given)
-	if (args.trace_given) { 
-	/* 	To support tracing/simulation, in trace mode, 
+	if (args.trace_given) {
+	/* 	To support tracing/simulation, in trace mode,
 		send special start_trace/stop_trace commands to the server,
 		and at end of test, kill the server.
 	*/
