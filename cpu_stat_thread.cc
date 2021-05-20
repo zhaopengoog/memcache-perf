@@ -25,6 +25,7 @@ static long double get_cpu_load() {
     long double a[4], b[4], loadavg=0;
     FILE *fp;
 	int c=0;
+        return 0;
 	
         fp = fopen("/proc/stat","r");
         c+=fscanf(fp,"%*s %Lf %Lf %Lf %Lf",&a[0],&a[1],&a[2],&a[3]);
